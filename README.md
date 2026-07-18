@@ -9,16 +9,18 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 Implemented scope: Phase 1 Task 1 only.
 
 - Core payment-plan and money-movement persistence model
+- Renter collection API that creates a collection money movement for an existing payment plan
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency and outbox persistence records
 - Flyway-managed database schema
-- PostgreSQL Testcontainers repository tests for persistence wiring and key uniqueness constraints
+- PostgreSQL Testcontainers tests for persistence wiring, key uniqueness constraints, and renter collection creation
 
 Not implemented yet:
 
-- Renter collection API
 - Property disbursement API
 - Provider adapter implementation
+- Renter collection provider submission
+- Idempotent duplicate collection response handling
 - Webhook ingestion
 - Outbox publishing
 - SNS/SQS consumers
