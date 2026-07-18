@@ -9,13 +9,20 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "idempotency_records")
+@Table(
+        name = "idempotency_records",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_idempotency_records_key_operation",
+                columnNames = {"idempotency_key", "operation"}
+        )
+)
 public class IdempotencyRecord {
 
     @Id
@@ -113,6 +120,12 @@ public class IdempotencyRecord {
 
     public String getResponsePayload() {
         return responsePayload;
+    }
+
+    public void complete(UUID resourceId, String responsePayload) {
+        this.resourceId = resourceId;
+        this.responsePayload = responsePayload;
+        this.status = IdempotencyStatus.COMPLETED;
     }
 
     public Instant getExpiresAt() {

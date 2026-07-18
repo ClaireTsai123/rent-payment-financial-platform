@@ -1,4 +1,4 @@
-package com.claire.rentpaymentfinancialplatform.collection;
+package com.claire.rentpaymentfinancialplatform.disbursement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-class RenterCollectionControllerTests extends PostgresIntegrationTest {
+class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -70,11 +70,11 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void createsRenterCollectionAgainstExistingPaymentPlan() throws Exception {
+    void createsPropertyDisbursementAgainstExistingPaymentPlan() throws Exception {
         PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
-        String operationKey = "collection-" + UUID.randomUUID();
+        String operationKey = "disbursement-" + UUID.randomUUID();
 
-        mockMvc.perform(post("/api/v1/renter-collections")
+        mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -86,30 +86,30 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                                 """.formatted(paymentPlan.getId(), operationKey)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.paymentPlanId").value(paymentPlan.getId().toString()))
-                .andExpect(jsonPath("$.type").value("RENTER_COLLECTION"))
+                .andExpect(jsonPath("$.type").value("PROPERTY_DISBURSEMENT"))
                 .andExpect(jsonPath("$.state").value("CREATED"))
-                .andExpect(jsonPath("$.amount").value(500.00))
+                .andExpect(jsonPath("$.amount").value(2500.00))
                 .andExpect(jsonPath("$.currency").value("USD"))
                 .andExpect(jsonPath("$.operationKey").value(operationKey));
 
         assertThat(moneyMovementRepository.findAll()).singleElement().satisfies(moneyMovement -> {
             assertThat(moneyMovement.getPaymentPlan().getId()).isEqualTo(paymentPlan.getId());
-            assertThat(moneyMovement.getType()).isEqualTo(MoneyMovementType.RENTER_COLLECTION);
+            assertThat(moneyMovement.getType()).isEqualTo(MoneyMovementType.PROPERTY_DISBURSEMENT);
             assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.CREATED);
-            assertThat(moneyMovement.getAmount()).isEqualByComparingTo(paymentPlan.getInitialCollectionAmount());
+            assertThat(moneyMovement.getAmount()).isEqualByComparingTo(paymentPlan.getRentAmount());
             assertThat(moneyMovement.getOperationKey()).isEqualTo(operationKey);
         });
     }
 
     @Test
     void returnsNotFoundWhenPaymentPlanDoesNotExist() throws Exception {
-        mockMvc.perform(post("/api/v1/renter-collections")
+        mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "paymentPlanId": "%s",
-                                  "operationKey": "collection-%s",
+                                  "operationKey": "disbursement-%s",
                                   "currency": "USD"
                                 }
                                 """.formatted(UUID.randomUUID(), UUID.randomUUID())))
@@ -122,7 +122,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
     @Test
     void returnsConflictForDuplicateOperationKey() throws Exception {
         PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
-        String operationKey = "collection-" + UUID.randomUUID();
+        String operationKey = "disbursement-" + UUID.randomUUID();
         String request = """
                 {
                   "paymentPlanId": "%s",
@@ -131,12 +131,12 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 }
                 """.formatted(paymentPlan.getId(), operationKey);
 
-        mockMvc.perform(post("/api/v1/renter-collections")
+        mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isCreated());
-        mockMvc.perform(post("/api/v1/renter-collections")
+        mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -147,18 +147,18 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void replaysCompletedCollectionForDuplicateIdempotencyKeyAndSameRequest() throws Exception {
+    void replaysCompletedDisbursementForDuplicateIdempotencyKeyAndSameRequest() throws Exception {
         PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
         String idempotencyKey = "idem-" + UUID.randomUUID();
         String request = """
                 {
                   "paymentPlanId": "%s",
-                  "operationKey": "collection-%s",
+                  "operationKey": "disbursement-%s",
                   "currency": "USD"
                 }
                 """.formatted(paymentPlan.getId(), UUID.randomUUID());
 
-        String firstResponse = mockMvc.perform(post("/api/v1/renter-collections")
+        String firstResponse = mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -166,7 +166,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        String secondResponse = mockMvc.perform(post("/api/v1/renter-collections")
+        String secondResponse = mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -185,29 +185,29 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void rejectsCollectionWhenIdempotencyKeyIsReusedWithDifferentRequest() throws Exception {
+    void rejectsDisbursementWhenIdempotencyKeyIsReusedWithDifferentRequest() throws Exception {
         PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
         String idempotencyKey = "idem-" + UUID.randomUUID();
 
-        mockMvc.perform(post("/api/v1/renter-collections")
+        mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "paymentPlanId": "%s",
-                                  "operationKey": "collection-%s",
+                                  "operationKey": "disbursement-%s",
                                   "currency": "USD"
                                 }
                                 """.formatted(paymentPlan.getId(), UUID.randomUUID())))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/v1/renter-collections")
+        mockMvc.perform(post("/api/v1/property-disbursements")
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "paymentPlanId": "%s",
-                                  "operationKey": "collection-%s",
+                                  "operationKey": "disbursement-%s",
                                   "currency": "USD"
                                 }
                                 """.formatted(paymentPlan.getId(), UUID.randomUUID())))

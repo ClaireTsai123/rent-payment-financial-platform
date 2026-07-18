@@ -1,4 +1,4 @@
-package com.claire.rentpaymentfinancialplatform.collection;
+package com.claire.rentpaymentfinancialplatform.shared.api;
 
 import java.util.UUID;
 
