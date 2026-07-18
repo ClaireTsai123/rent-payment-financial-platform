@@ -68,15 +68,15 @@ This project is placed within the payments and money-movement area of FinPlatfor
 
 ### Collaborating domains
 
-| Domain/team | Responsibility | Relationship to this project |
-| --- | --- | --- |
-| Billing | Rent obligations, schedules, amounts, due dates | Supplies billing and repayment obligations |
-| Risk | Eligibility and risk decisions | Provides decisions; risk-model development is out of scope |
-| Ledger | Shared financial posting and accounting capability | Receives reliable posting events and exposes records for reconciliation |
-| Finance Operations | Settlement exceptions and manual investigation | Uses operational and reconciliation results |
-| Product | Customer and business requirements | Defines behavior and prioritization |
-| QA/SDET | Functional, integration, and failure testing | Validates payment and provider scenarios |
-| SRE/Platform | Production infrastructure and reliability | Supports EKS, monitoring, incident response, and releases |
+| Domain/team        | Responsibility                                     | Relationship to this project                                            |
+|--------------------|----------------------------------------------------|-------------------------------------------------------------------------|
+| Billing            | Rent obligations, schedules, amounts, due dates    | Supplies billing and repayment obligations                              |
+| Risk               | Eligibility and risk decisions                     | Provides decisions; risk-model development is out of scope              |
+| Ledger             | Shared financial posting and accounting capability | Receives reliable posting events and exposes records for reconciliation |
+| Finance Operations | Settlement exceptions and manual investigation     | Uses operational and reconciliation results                             |
+| Product            | Customer and business requirements                 | Defines behavior and prioritization                                     |
+| QA/SDET            | Functional, integration, and failure testing       | Validates payment and provider scenarios                                |
+| SRE/Platform       | Production infrastructure and reliability          | Supports EKS, monitoring, incident response, and releases               |
 
 Do not describe Billing, Risk, Ledger, Settlement, Reconciliation, Webhook, and Idempotency as eight independently owned microservices. Some are shared services, some are internal modules, and some are worker or batch workloads.
 
@@ -98,14 +98,14 @@ It combines:
 
 ### Deployment units
 
-| Deployment unit | Type | Main responsibility |
-| --- | --- | --- |
-| Rent Payment Application | Spring Boot API application | Payment plans, collections, disbursements, repayments, provider APIs, webhooks, idempotency, state management, outbox |
-| Financial Operations Worker | Spring Boot worker | SQS consumers, settlement updates, ACH returns, ledger-posting delivery, retry and DLQ handling |
-| Reconciliation Application | Spring Batch scheduled workload | File ingestion, matching, discrepancy creation, restartable reconciliation jobs |
-| Billing | Shared upstream service | Billing obligations and schedules |
-| Risk | Shared service | Eligibility/risk decisions |
-| Ledger | Shared financial platform service | Auditable financial postings and accounting records |
+| Deployment unit             | Type                              | Main responsibility                                                                                                   |
+|-----------------------------|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Rent Payment Application    | Spring Boot API application       | Payment plans, collections, disbursements, repayments, provider APIs, webhooks, idempotency, state management, outbox |
+| Financial Operations Worker | Spring Boot worker                | SQS consumers, settlement updates, ACH returns, ledger-posting delivery, retry and DLQ handling                       |
+| Reconciliation Application  | Spring Batch scheduled workload   | File ingestion, matching, discrepancy creation, restartable reconciliation jobs                                       |
+| Billing                     | Shared upstream service           | Billing obligations and schedules                                                                                     |
+| Risk                        | Shared service                    | Eligibility/risk decisions                                                                                            |
+| Ledger                      | Shared financial platform service | Auditable financial postings and accounting records                                                                   |
 
 ### High-level topology
 
@@ -217,20 +217,20 @@ rent-payment-application/
 
 ### Primary entities
 
-| Entity | Purpose |
-| --- | --- |
-| PaymentPlan | Rent amount, installment structure, important dates, and aggregate status |
-| MoneyMovement | One collection, disbursement, repayment, refund, or reversal |
-| PaymentAttempt | A specific attempt to execute a money movement through a provider |
-| ProviderTransaction | Provider reference, normalized status, raw status, and settlement reference |
-| MoneyMovementStateHistory | Append-only audit trail of state changes |
-| IdempotencyRecord | Key, operation, request fingerprint, stored result/reference, and status |
-| WebhookEvent | Raw payload, provider event ID, signature result, processing status, and timestamps |
-| OutboxEvent | Reliable outbound financial event pending publication |
-| ProcessedEvent | SQS-consumer deduplication record |
-| SettlementRecord | Expected/actual settlement amounts, fees, dates, provider batch/reference, and status |
-| ReconciliationRun | Batch execution and source-file metadata |
-| ReconciliationResult | Match status and discrepancy details |
+| Entity                    | Purpose                                                                               |
+|---------------------------|---------------------------------------------------------------------------------------|
+| PaymentPlan               | Rent amount, installment structure, important dates, and aggregate status             |
+| MoneyMovement             | One collection, disbursement, repayment, refund, or reversal                          |
+| PaymentAttempt            | A specific attempt to execute a money movement through a provider                     |
+| ProviderTransaction       | Provider reference, normalized status, raw status, and settlement reference           |
+| MoneyMovementStateHistory | Append-only audit trail of state changes                                              |
+| IdempotencyRecord         | Key, operation, request fingerprint, stored result/reference, and status              |
+| WebhookEvent              | Raw payload, provider event ID, signature result, processing status, and timestamps   |
+| OutboxEvent               | Reliable outbound financial event pending publication                                 |
+| ProcessedEvent            | SQS-consumer deduplication record                                                     |
+| SettlementRecord          | Expected/actual settlement amounts, fees, dates, provider batch/reference, and status |
+| ReconciliationRun         | Batch execution and source-file metadata                                              |
+| ReconciliationResult      | Match status and discrepancy details                                                  |
 
 ### Money movement types
 
@@ -408,16 +408,16 @@ They may be added later only when a concrete project requirement and implementat
 
 ### Deliberate differences from the Weee! project
 
-| Weee! Omnichannel project | Flex FinPlatform project |
-| --- | --- |
-| Spring Cloud microservices | Service-oriented financial platform with a modular payment application |
-| OpenFeign synchronous orchestration | Provider adapters and limited shared-service REST integration |
-| Kafka | Amazon SNS and SQS |
+| Weee! Omnichannel project                        | Flex FinPlatform project                                                               |
+|--------------------------------------------------|----------------------------------------------------------------------------------------|
+| Spring Cloud microservices                       | Service-oriented financial platform with a modular payment application                 |
+| OpenFeign synchronous orchestration              | Provider adapters and limited shared-service REST integration                          |
+| Kafka                                            | Amazon SNS and SQS                                                                     |
 | Saga compensation across order/inventory/payment | Local transactions plus provider-aware recovery, refunds/reversals, and reconciliation |
-| MySQL and ShardingSphere | PostgreSQL and Aurora PostgreSQL |
-| Redis-focused cart/catalog caching | No cache in the canonical first version |
-| EKS | EKS also used, but deployment is not the differentiator |
-| Order and inventory lifecycle | Financial money-movement, settlement, ledger, and reconciliation lifecycle |
+| MySQL and ShardingSphere                         | PostgreSQL and Aurora PostgreSQL                                                       |
+| Redis-focused cart/catalog caching               | No cache in the canonical first version                                                |
+| EKS                                              | EKS also used, but deployment is not the differentiator                                |
+| Order and inventory lifecycle                    | Financial money-movement, settlement, ledger, and reconciliation lifecycle             |
 
 ---
 
@@ -592,18 +592,18 @@ When this file is supplied to Codex:
 
 ## 15. Decision Log
 
-| Decision | Status | Rationale |
-| --- | --- | --- |
-| Project belongs to FinPlatform, focused on Payments & Money Movement | Fixed | Matches Flex public role descriptions and project scope |
-| Architecture is service-oriented, not all-microservices | Fixed | Preserves real platform boundaries without unnecessary fragmentation |
-| Rent Payment Application is modular Spring Boot | Fixed | Keeps strongly related payment data and logic coherent |
-| Billing, Risk, and Ledger are shared service boundaries | Fixed | They serve broader platform concerns and cross-team consumers |
-| Messaging uses Amazon SNS/SQS | Fixed for project | Differentiates from Weee! Kafka design and fits the AWS/message-queue direction |
-| Reconciliation uses Spring Batch and S3-style files | Fixed for project | Creates a realistic, restartable financial-operations workload |
-| Production database is Aurora PostgreSQL | Fixed for project | Consistent with Flex public AWS stack |
-| Deployment uses Docker/EKS | Fixed for project | Explicitly aligned with Flex public stack |
-| Gradle replaces Maven | Fixed | Explicit in current public Flex backend JDs |
-| ElastiCache, DynamoDB, Snowflake, IaC omitted initially | Fixed for Phase 1 | Avoids unjustified stack inflation |
+| Decision                                                             | Status            | Rationale                                                                       |
+|----------------------------------------------------------------------|-------------------|---------------------------------------------------------------------------------|
+| Project belongs to FinPlatform, focused on Payments & Money Movement | Fixed             | Matches Flex public role descriptions and project scope                         |
+| Architecture is service-oriented, not all-microservices              | Fixed             | Preserves real platform boundaries without unnecessary fragmentation            |
+| Rent Payment Application is modular Spring Boot                      | Fixed             | Keeps strongly related payment data and logic coherent                          |
+| Billing, Risk, and Ledger are shared service boundaries              | Fixed             | They serve broader platform concerns and cross-team consumers                   |
+| Messaging uses Amazon SNS/SQS                                        | Fixed for project | Differentiates from Weee! Kafka design and fits the AWS/message-queue direction |
+| Reconciliation uses Spring Batch and S3-style files                  | Fixed for project | Creates a realistic, restartable financial-operations workload                  |
+| Production database is Aurora PostgreSQL                             | Fixed for project | Consistent with Flex public AWS stack                                           |
+| Deployment uses Docker/EKS                                           | Fixed for project | Explicitly aligned with Flex public stack                                       |
+| Gradle replaces Maven                                                | Fixed             | Explicit in current public Flex backend JDs                                     |
+| ElastiCache, DynamoDB, Snowflake, IaC omitted initially              | Fixed for Phase 1 | Avoids unjustified stack inflation                                              |
 
 ---
 

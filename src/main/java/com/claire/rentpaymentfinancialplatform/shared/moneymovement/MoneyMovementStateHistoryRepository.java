@@ -1,0 +1,7 @@
+package com.claire.rentpaymentfinancialplatform.shared.moneymovement;
+
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface MoneyMovementStateHistoryRepository extends JpaRepository<MoneyMovementStateHistory, UUID> {
+}
