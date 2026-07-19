@@ -6,22 +6,23 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-4 only.
+Implemented scope: Phase 1 Tasks 1-5 only.
 
 - Core payment-plan and money-movement persistence model
-- Renter collection API that creates a collection money movement for an existing payment plan
-- Property disbursement API that creates a separate disbursement money movement for an existing payment plan
+- Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
+- Property disbursement API that creates and immediately submits a separate disbursement money movement for an existing payment plan
 - API-level idempotency using `Idempotency-Key`, stable request fingerprints, stored response replay, and conflicting-key rejection
+- Provider adapter contract with a deterministic mock provider implementation
+- Payment-attempt creation, provider-transaction persistence, provider-result status mapping, money-movement state updates, and state-history append during provider submission
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency and outbox persistence records
 - Flyway-managed database schema
-- PostgreSQL Testcontainers tests for persistence wiring, key uniqueness constraints, renter collection creation, property disbursement creation, and idempotency behavior
+- PostgreSQL Testcontainers tests for persistence wiring, key uniqueness constraints, renter collection creation, property disbursement creation, provider submission side effects, and idempotency behavior
 
 Not implemented yet:
 
 - Provider adapter implementation
-- Renter collection provider submission
-- Property disbursement provider submission
+- Real provider integration
 - Webhook ingestion
 - Outbox publishing
 - SNS/SQS consumers
@@ -74,6 +75,34 @@ PostgreSQL. Concurrent duplicate requests are protected by that constraint: one 
 creates the in-progress record, while a duplicate in-flight request receives `409`.
 Records expire after 24 hours; expired key reuse is rejected with `409`, so callers
 must send a fresh `Idempotency-Key`.
+
+## Provider Submission
+
+The Phase 1 vertical slice submits renter collections and property disbursements
+immediately through an internal `PaymentProviderAdapter`. The current adapter is a
+deterministic mock provider that returns stable mock provider references and normalized
+provider statuses.
+
+Mock provider scenarios are selected by `operationKey` so tests and local demos are
+repeatable:
+
+- Default operation keys produce an accepted `PROCESSING` provider result.
+- Operation keys containing `mock-fail` produce a definitive failure.
+- Operation keys containing `mock-timeout` produce an ambiguous timeout.
+
+Provider submission records the first payment attempt, persists the provider transaction,
+updates the money-movement state, and appends state history. Ambiguous timeout results
+are stored as provider status `UNKNOWN` with the payment attempt marked `AMBIGUOUS`; the
+money movement remains `PROCESSING` so a later provider-status verification workflow can
+resolve it. The service does not retry ambiguous submissions in this phase.
+
+The public API keeps `operationKey` in the request body. Internally, the provider
+idempotency key is currently derived from the same operation key to preserve backward
+compatibility and fit the existing provider idempotency column; future provider-specific
+adapters can change that derivation behind the adapter boundary.
+
+Webhook processing, retry policy, polling, settlement, and reconciliation are intentionally
+left for later Phase 1 tasks.
 
 ## Tests
 

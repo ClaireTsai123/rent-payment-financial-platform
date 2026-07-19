@@ -86,6 +86,12 @@ public class PaymentAttempt {
         return status;
     }
 
+    public void recordProviderResult(PaymentAttemptStatus status, String failureCode, String failureMessage) {
+        this.status = status;
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
+    }
+
     public String getFailureCode() {
         return failureCode;
     }

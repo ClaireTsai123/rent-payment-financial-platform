@@ -128,6 +128,10 @@ public class MoneyMovement {
         return operationKey;
     }
 
+    public void transitionTo(MoneyMovementState state) {
+        this.state = state;
+    }
+
     public long getVersion() {
         return version;
     }

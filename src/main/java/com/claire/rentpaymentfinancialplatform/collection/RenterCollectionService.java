@@ -5,6 +5,7 @@ import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlanRepository
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyOperation;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyRecord;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyService;
+import com.claire.rentpaymentfinancialplatform.provider.ProviderSubmissionService;
 import com.claire.rentpaymentfinancialplatform.shared.domain.IdempotencyStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementType;
@@ -21,15 +22,18 @@ public class RenterCollectionService {
     private final PaymentPlanRepository paymentPlanRepository;
     private final MoneyMovementRepository moneyMovementRepository;
     private final IdempotencyService idempotencyService;
+    private final ProviderSubmissionService providerSubmissionService;
 
     public RenterCollectionService(
             PaymentPlanRepository paymentPlanRepository,
             MoneyMovementRepository moneyMovementRepository,
-            IdempotencyService idempotencyService
+            IdempotencyService idempotencyService,
+            ProviderSubmissionService providerSubmissionService
     ) {
         this.paymentPlanRepository = paymentPlanRepository;
         this.moneyMovementRepository = moneyMovementRepository;
         this.idempotencyService = idempotencyService;
+        this.providerSubmissionService = providerSubmissionService;
     }
 
     @Transactional
@@ -55,6 +59,7 @@ public class RenterCollectionService {
                 request.currency(),
                 request.operationKey()
         ));
+        providerSubmissionService.submit(moneyMovement);
 
         RenterCollectionResponse response = toResponse(moneyMovement);
         idempotencyService.complete(idempotencyRecord, moneyMovement.getId(), response);

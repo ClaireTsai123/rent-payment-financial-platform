@@ -12,7 +12,9 @@ import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlan;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlanRepository;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementType;
+import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentAttemptStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentPlanStatus;
+import com.claire.rentpaymentfinancialplatform.shared.domain.ProviderTransactionStatus;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistoryRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.PaymentAttemptRepository;
@@ -87,7 +89,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.paymentPlanId").value(paymentPlan.getId().toString()))
                 .andExpect(jsonPath("$.type").value("RENTER_COLLECTION"))
-                .andExpect(jsonPath("$.state").value("CREATED"))
+                .andExpect(jsonPath("$.state").value("PROCESSING"))
                 .andExpect(jsonPath("$.amount").value(500.00))
                 .andExpect(jsonPath("$.currency").value("USD"))
                 .andExpect(jsonPath("$.operationKey").value(operationKey));
@@ -95,9 +97,104 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
         assertThat(moneyMovementRepository.findAll()).singleElement().satisfies(moneyMovement -> {
             assertThat(moneyMovement.getPaymentPlan().getId()).isEqualTo(paymentPlan.getId());
             assertThat(moneyMovement.getType()).isEqualTo(MoneyMovementType.RENTER_COLLECTION);
-            assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.CREATED);
+            assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.PROCESSING);
             assertThat(moneyMovement.getAmount()).isEqualByComparingTo(paymentPlan.getInitialCollectionAmount());
             assertThat(moneyMovement.getOperationKey()).isEqualTo(operationKey);
+        });
+        assertThat(paymentAttemptRepository.findAll()).singleElement().satisfies(attempt -> {
+            assertThat(attempt.getAttemptNumber()).isEqualTo(1);
+            assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.PROCESSING);
+            assertThat(attempt.getFailureCode()).isNull();
+            assertThat(attempt.getFailureMessage()).isNull();
+        });
+        assertThat(providerTransactionRepository.findAll()).singleElement().satisfies(providerTransaction -> {
+            assertThat(providerTransaction.getProvider()).isEqualTo("mock-provider");
+            assertThat(providerTransaction.getProviderTransactionId()).startsWith("mock-txn-");
+            assertThat(providerTransaction.getProviderIdempotencyKey()).isEqualTo(operationKey);
+            assertThat(providerTransaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.PROCESSING);
+            assertThat(providerTransaction.getRawStatus()).isEqualTo("PROCESSING");
+        });
+        assertThat(stateHistoryRepository.findAll()).singleElement().satisfies(history -> {
+            assertThat(history.getFromState()).isEqualTo(MoneyMovementState.CREATED);
+            assertThat(history.getToState()).isEqualTo(MoneyMovementState.PROCESSING);
+            assertThat(history.getReason()).isEqualTo("PROVIDER_SUBMITTED");
+        });
+    }
+
+    @Test
+    void recordsDefinitiveProviderFailureForCollection() throws Exception {
+        PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
+        String operationKey = "collection-mock-fail-" + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Idempotency-Key", "idem-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentPlanId": "%s",
+                                  "operationKey": "%s",
+                                  "currency": "USD"
+                                }
+                                """.formatted(paymentPlan.getId(), operationKey)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.state").value("FAILED"));
+
+        assertThat(moneyMovementRepository.findAll()).singleElement()
+                .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.FAILED));
+        assertThat(paymentAttemptRepository.findAll()).singleElement().satisfies(attempt -> {
+            assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
+            assertThat(attempt.getFailureCode()).isEqualTo("MOCK_PROVIDER_DECLINED");
+            assertThat(attempt.getFailureMessage()).isEqualTo("Mock provider returned a definitive failure.");
+        });
+        assertThat(providerTransactionRepository.findAll()).singleElement().satisfies(providerTransaction -> {
+            assertThat(providerTransaction.getProviderTransactionId()).startsWith("mock-failed-txn-");
+            assertThat(providerTransaction.getProviderIdempotencyKey()).isEqualTo(operationKey);
+            assertThat(providerTransaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.FAILED);
+            assertThat(providerTransaction.getRawStatus()).isEqualTo("DECLINED");
+        });
+        assertThat(stateHistoryRepository.findAll()).singleElement().satisfies(history -> {
+            assertThat(history.getFromState()).isEqualTo(MoneyMovementState.CREATED);
+            assertThat(history.getToState()).isEqualTo(MoneyMovementState.FAILED);
+            assertThat(history.getReason()).isEqualTo("PROVIDER_FAILED");
+        });
+    }
+
+    @Test
+    void recordsAmbiguousProviderTimeoutForCollectionWithoutFailingOrRetrying() throws Exception {
+        PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
+        String operationKey = "collection-mock-timeout-" + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Idempotency-Key", "idem-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentPlanId": "%s",
+                                  "operationKey": "%s",
+                                  "currency": "USD"
+                                }
+                                """.formatted(paymentPlan.getId(), operationKey)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.state").value("PROCESSING"));
+
+        assertThat(moneyMovementRepository.findAll()).singleElement()
+                .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.PROCESSING));
+        assertThat(paymentAttemptRepository.findAll()).singleElement().satisfies(attempt -> {
+            assertThat(attempt.getAttemptNumber()).isEqualTo(1);
+            assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.AMBIGUOUS);
+            assertThat(attempt.getFailureCode()).isEqualTo("MOCK_PROVIDER_TIMEOUT");
+            assertThat(attempt.getFailureMessage()).isEqualTo("Mock provider timed out before final status was known.");
+        });
+        assertThat(providerTransactionRepository.findAll()).singleElement().satisfies(providerTransaction -> {
+            assertThat(providerTransaction.getProviderTransactionId()).startsWith("mock-timeout-interaction-");
+            assertThat(providerTransaction.getProviderIdempotencyKey()).isEqualTo(operationKey);
+            assertThat(providerTransaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.UNKNOWN);
+            assertThat(providerTransaction.getRawStatus()).isEqualTo("TIMEOUT");
+        });
+        assertThat(stateHistoryRepository.findAll()).singleElement().satisfies(history -> {
+            assertThat(history.getFromState()).isEqualTo(MoneyMovementState.CREATED);
+            assertThat(history.getToState()).isEqualTo(MoneyMovementState.PROCESSING);
+            assertThat(history.getReason()).isEqualTo("PROVIDER_AMBIGUOUS");
         });
     }
 
@@ -177,6 +274,9 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
 
         assertThat(secondResponse).isEqualTo(firstResponse);
         assertThat(moneyMovementRepository.findAll()).hasSize(1);
+        assertThat(paymentAttemptRepository.findAll()).hasSize(1);
+        assertThat(providerTransactionRepository.findAll()).hasSize(1);
+        assertThat(stateHistoryRepository.findAll()).hasSize(1);
         assertThat(idempotencyRecordRepository.findAll()).singleElement().satisfies(record -> {
             assertThat(record.getResourceId()).isEqualTo(moneyMovementRepository.findAll().get(0).getId());
             assertThat(record.getResponsePayload()).isNotBlank();
