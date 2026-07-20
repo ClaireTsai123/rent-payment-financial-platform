@@ -125,6 +125,11 @@ public class ProviderTransaction {
         return normalizedStatus;
     }
 
+    public void recordProviderStatus(ProviderTransactionStatus normalizedStatus, String rawStatus) {
+        this.normalizedStatus = normalizedStatus;
+        this.rawStatus = rawStatus;
+    }
+
     public String getRawStatus() {
         return rawStatus;
     }

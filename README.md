@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-5 only.
+Implemented scope: Phase 1 Tasks 1-6 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -14,16 +14,15 @@ Implemented scope: Phase 1 Tasks 1-5 only.
 - API-level idempotency using `Idempotency-Key`, stable request fingerprints, stored response replay, and conflicting-key rejection
 - Provider adapter contract with a deterministic mock provider implementation
 - Payment-attempt creation, provider-transaction persistence, provider-result status mapping, money-movement state updates, and state-history append during provider submission
+- Mock-provider webhook ingestion with shared-secret signature verification, raw payload audit persistence, provider-event deduplication, and guarded state transitions
 - Payment attempts, provider transaction references, and money-movement state history
-- Idempotency and outbox persistence records
+- Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
-- PostgreSQL Testcontainers tests for persistence wiring, key uniqueness constraints, renter collection creation, property disbursement creation, provider submission side effects, and idempotency behavior
+- PostgreSQL Testcontainers tests for persistence wiring, key uniqueness constraints, renter collection creation, property disbursement creation, provider submission side effects, webhook behavior, and idempotency behavior
 
 Not implemented yet:
 
-- Provider adapter implementation
 - Real provider integration
-- Webhook ingestion
 - Outbox publishing
 - SNS/SQS consumers
 - Settlement and reconciliation workflows
@@ -58,6 +57,7 @@ These can be overridden with:
 SPRING_DATASOURCE_URL
 SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
+MOCK_PROVIDER_WEBHOOK_SECRET
 ```
 
 Flyway owns schema creation. Hibernate is configured with `ddl-auto=validate`.
@@ -101,8 +101,44 @@ idempotency key is currently derived from the same operation key to preserve bac
 compatibility and fit the existing provider idempotency column; future provider-specific
 adapters can change that derivation behind the adapter boundary.
 
-Webhook processing, retry policy, polling, settlement, and reconciliation are intentionally
+Webhook reprocessing, retry policy, polling, settlement, and reconciliation are intentionally
 left for later Phase 1 tasks.
+
+## Provider Webhooks
+
+Mock-provider webhooks are accepted at:
+
+```text
+POST /api/v1/provider-webhooks/mock-provider
+X-Mock-Provider-Signature: <shared secret>
+```
+
+The default local shared secret is `local-mock-webhook-secret` and can be overridden
+with `MOCK_PROVIDER_WEBHOOK_SECRET`.
+
+Webhook payloads use a normalized mock-provider shape:
+
+```json
+{
+  "providerEventId": "event-123",
+  "providerTransactionId": "mock-txn-123",
+  "providerStatus": "SUCCEEDED",
+  "occurredAt": "2026-08-01T12:00:00Z"
+}
+```
+
+Every valid webhook payload is persisted in `provider_webhook_events` with the raw JSON
+for audit and later reprocessing. The database enforces uniqueness on
+`(provider, provider_event_id)`. Duplicate delivery returns success with `DUPLICATE`
+and does not apply a second state update.
+
+Unknown provider transactions are retained as `UNMATCHED` instead of being dropped.
+Terminal provider transactions are protected from stale or invalid regression; such
+events are retained as `IGNORED`.
+
+Webhook signature verification, ingestion, deduplication, audit persistence, and local
+state updates are implemented. Webhook reprocessing, provider polling, retries, outbox
+publishing, SNS/SQS, settlement, and reconciliation remain out of scope for this task.
 
 ## Tests
 

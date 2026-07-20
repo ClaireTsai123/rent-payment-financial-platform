@@ -3,6 +3,7 @@ package com.claire.rentpaymentfinancialplatform.shared.api;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyConflictException;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyExpiredException;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyInProgressException;
+import com.claire.rentpaymentfinancialplatform.webhook.WebhookSignatureException;
 import java.time.Instant;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -55,5 +56,11 @@ public class RestExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     ApiErrorResponse handleValidationFailure(MethodArgumentNotValidException exception) {
         return new ApiErrorResponse("VALIDATION_FAILED", "Request validation failed.", Instant.now());
+    }
+
+    @ExceptionHandler(WebhookSignatureException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    ApiErrorResponse handleWebhookSignatureFailure(WebhookSignatureException exception) {
+        return new ApiErrorResponse("WEBHOOK_SIGNATURE_INVALID", exception.getMessage(), Instant.now());
     }
 }
