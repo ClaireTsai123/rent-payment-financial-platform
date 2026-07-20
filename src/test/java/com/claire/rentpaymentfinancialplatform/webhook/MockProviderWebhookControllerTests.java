@@ -10,12 +10,14 @@ import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyRecordRepo
 import com.claire.rentpaymentfinancialplatform.outbox.OutboxEventRepository;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlan;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlanRepository;
+import com.claire.rentpaymentfinancialplatform.settlement.SettlementRecordRepository;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementType;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentAttemptStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentPlanStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.ProviderTransactionStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.ProviderWebhookEventStatus;
+import com.claire.rentpaymentfinancialplatform.shared.domain.SettlementStatus;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistoryRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.PaymentAttemptRepository;
@@ -70,9 +72,13 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
     @Autowired
     private ProviderWebhookEventRepository webhookEventRepository;
 
+    @Autowired
+    private SettlementRecordRepository settlementRecordRepository;
+
     @BeforeEach
     void cleanDatabase() {
         webhookEventRepository.deleteAll();
+        settlementRecordRepository.deleteAll();
         providerTransactionRepository.deleteAll();
         paymentAttemptRepository.deleteAll();
         stateHistoryRepository.deleteAll();
@@ -110,6 +116,19 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
                 });
         assertThat(webhookEventRepository.findAll()).singleElement()
                 .satisfies(event -> assertThat(event.getProcessingStatus()).isEqualTo(ProviderWebhookEventStatus.APPLIED));
+        var settledMoneyMovement = moneyMovementRepository.findAll().get(0);
+        assertThat(settlementRecordRepository.findAll()).singleElement().satisfies(settlement -> {
+            assertThat(settlement.getMoneyMovementId()).isEqualTo(settledMoneyMovement.getId());
+            assertThat(settlement.getProviderTransactionId()).isEqualTo(providerTransaction.getId());
+            assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.EXPECTED);
+            assertThat(settlement.getExpectedGrossAmount()).isEqualByComparingTo(settledMoneyMovement.getAmount());
+            assertThat(settlement.getExpectedFeeAmount()).isEqualByComparingTo("0.00");
+            assertThat(settlement.getExpectedNetAmount()).isEqualByComparingTo(settledMoneyMovement.getAmount());
+            assertThat(settlement.getCurrency()).isEqualTo(settledMoneyMovement.getCurrency());
+            assertThat(settlement.getProvider()).isEqualTo(providerTransaction.getProvider());
+            assertThat(settlement.getProviderTransactionReference()).isEqualTo(providerTransaction.getProviderTransactionId());
+            assertThat(settlement.getExpectedSettlementDate()).isNotNull();
+        });
     }
 
     @ParameterizedTest
@@ -133,6 +152,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         });
         assertThat(moneyMovementRepository.findAll()).singleElement()
                 .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.FAILED));
+        assertThat(settlementRecordRepository.findAll()).isEmpty();
         assertThat(stateHistoryRepository.findAll()).hasSize(2)
                 .last()
                 .satisfies(history -> assertThat(history.getReason()).isEqualTo("WEBHOOK_FAILED"));
@@ -160,6 +180,8 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
                 .satisfies(attempt -> assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED));
         assertThat(moneyMovementRepository.findAll()).singleElement()
                 .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.SUCCEEDED));
+        assertThat(settlementRecordRepository.findAll()).singleElement()
+                .satisfies(settlement -> assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.EXPECTED));
     }
 
     @ParameterizedTest
@@ -178,6 +200,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         assertThat(webhookEventRepository.findAll()).hasSize(1);
         assertThat(stateHistoryRepository.findAll()).hasSize(2);
         assertThat(outboxEventRepository.findAll()).hasSize(2);
+        assertThat(settlementRecordRepository.findAll()).hasSize(1);
         assertThat(providerTransactionRepository.findAll()).singleElement()
                 .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.SUCCEEDED));
     }
@@ -203,6 +226,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
                 .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.PROCESSING));
         assertThat(stateHistoryRepository.findAll()).hasSize(1);
         assertThat(outboxEventRepository.findAll()).hasSize(1);
+        assertThat(settlementRecordRepository.findAll()).isEmpty();
     }
 
     @ParameterizedTest
@@ -222,6 +246,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         assertThat(providerTransactionRepository.findAll()).singleElement()
                 .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.PROCESSING));
         assertThat(outboxEventRepository.findAll()).hasSize(1);
+        assertThat(settlementRecordRepository.findAll()).isEmpty();
     }
 
     @ParameterizedTest
@@ -245,6 +270,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         assertThat(providerTransactionRepository.findAll()).singleElement()
                 .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.PROCESSING));
         assertThat(outboxEventRepository.findAll()).hasSize(1);
+        assertThat(settlementRecordRepository.findAll()).isEmpty();
     }
 
     @ParameterizedTest
@@ -278,6 +304,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
                 .satisfies(event -> assertThat(event.getProcessingStatus()).isEqualTo(ProviderWebhookEventStatus.IGNORED));
         assertThat(stateHistoryRepository.findAll()).hasSize(2);
         assertThat(outboxEventRepository.findAll()).hasSize(2);
+        assertThat(settlementRecordRepository.findAll()).hasSize(1);
     }
 
     private static Stream<ApiFlow> apiFlows() {

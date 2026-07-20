@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-9 only.
+Implemented scope: Phase 1 Tasks 1-10 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -18,6 +18,7 @@ Implemented scope: Phase 1 Tasks 1-9 only.
 - Centralized money-movement state-transition rules with invalid-regression rejection, no-op handling, and state-history creation
 - Transactional outbox persistence for meaningful money-movement state changes
 - Scheduled outbox publisher with PostgreSQL-safe claiming, local mock event publishing, retry scheduling, and terminal failure handling
+- Expected settlement record creation when provider-confirmed money movements reach `SUCCEEDED`
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
@@ -27,7 +28,7 @@ Not implemented yet:
 
 - Real provider integration
 - SNS/SQS consumers
-- Settlement and reconciliation workflows
+- Settlement file matching and reconciliation workflows
 
 ## Technology
 
@@ -190,6 +191,17 @@ After the configured maximum attempts, rows are marked `FAILED`.
 
 Real SNS/SQS publishing, consumers, settlement, and reconciliation remain out of scope
 for this task.
+
+## Settlement Records
+
+When a provider-backed money movement reaches `SUCCEEDED`, the application creates one
+`SettlementRecord` with status `EXPECTED`. The record captures expected gross amount,
+expected fee amount, expected net amount, currency, expected settlement date, provider,
+and provider transaction reference. Actual settlement amounts, provider batch references,
+mismatch detection, and reconciliation remain for later Phase 1 work.
+
+Duplicate webhook replay and already-existing settlement expectations do not create
+additional settlement rows.
 
 ## Tests
 

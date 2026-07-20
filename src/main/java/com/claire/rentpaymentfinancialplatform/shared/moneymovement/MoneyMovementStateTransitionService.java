@@ -2,6 +2,7 @@ package com.claire.rentpaymentfinancialplatform.shared.moneymovement;
 
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.outbox.OutboxEventService;
+import com.claire.rentpaymentfinancialplatform.settlement.SettlementExpectationService;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,15 +13,18 @@ public class MoneyMovementStateTransitionService {
     private final MoneyMovementRepository moneyMovementRepository;
     private final MoneyMovementStateHistoryRepository stateHistoryRepository;
     private final OutboxEventService outboxEventService;
+    private final SettlementExpectationService settlementExpectationService;
 
     public MoneyMovementStateTransitionService(
             MoneyMovementRepository moneyMovementRepository,
             MoneyMovementStateHistoryRepository stateHistoryRepository,
-            OutboxEventService outboxEventService
+            OutboxEventService outboxEventService,
+            SettlementExpectationService settlementExpectationService
     ) {
         this.moneyMovementRepository = moneyMovementRepository;
         this.stateHistoryRepository = stateHistoryRepository;
         this.outboxEventService = outboxEventService;
+        this.settlementExpectationService = settlementExpectationService;
     }
 
     @Transactional
@@ -45,6 +49,7 @@ public class MoneyMovementStateTransitionService {
                 reason
         ));
         outboxEventService.recordMoneyMovementStateChanged(moneyMovement, history);
+        settlementExpectationService.recordExpectedSettlementIfSucceeded(moneyMovement);
         return MoneyMovementStateTransitionResult.appliedTransition();
     }
 

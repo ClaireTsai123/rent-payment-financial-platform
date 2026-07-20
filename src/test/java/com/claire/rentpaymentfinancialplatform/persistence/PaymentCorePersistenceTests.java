@@ -10,6 +10,8 @@ import com.claire.rentpaymentfinancialplatform.outbox.OutboxEvent;
 import com.claire.rentpaymentfinancialplatform.outbox.OutboxEventRepository;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlan;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlanRepository;
+import com.claire.rentpaymentfinancialplatform.settlement.SettlementRecord;
+import com.claire.rentpaymentfinancialplatform.settlement.SettlementRecordRepository;
 import com.claire.rentpaymentfinancialplatform.shared.domain.IdempotencyStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementType;
@@ -17,6 +19,7 @@ import com.claire.rentpaymentfinancialplatform.shared.domain.OutboxEventStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentAttemptStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentPlanStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.ProviderTransactionStatus;
+import com.claire.rentpaymentfinancialplatform.shared.domain.SettlementStatus;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovement;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistory;
@@ -59,6 +62,9 @@ class PaymentCorePersistenceTests extends PostgresIntegrationTest {
 
     @Autowired
     private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
+    private SettlementRecordRepository settlementRecordRepository;
 
     @Test
     void persistsPaymentCoreRecords() {
@@ -103,6 +109,19 @@ class PaymentCorePersistenceTests extends PostgresIntegrationTest {
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-07-18T00:00:00Z")
         ));
+        SettlementRecord settlementRecord = settlementRecordRepository.saveAndFlush(new SettlementRecord(
+                UUID.randomUUID(),
+                moneyMovement,
+                providerTransaction,
+                SettlementStatus.EXPECTED,
+                moneyMovement.getAmount(),
+                new BigDecimal("0.00"),
+                moneyMovement.getAmount(),
+                moneyMovement.getCurrency(),
+                LocalDate.of(2026, 8, 2),
+                providerTransaction.getProvider(),
+                providerTransaction.getProviderTransactionId()
+        ));
 
         assertThat(providerTransactionRepository.findByProviderAndProviderTransactionId(
                 providerTransaction.getProvider(),
@@ -122,6 +141,9 @@ class PaymentCorePersistenceTests extends PostgresIntegrationTest {
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-07-18T00:00:01Z")
         )).extracting(OutboxEvent::getId).contains(outboxEvent.getId());
+        assertThat(settlementRecordRepository.findByMoneyMovementId(moneyMovement.getId()))
+                .map(SettlementRecord::getId)
+                .contains(settlementRecord.getId());
         assertThat(idempotencyRecord.getExpiresAt()).isEqualTo(Instant.parse("2026-08-01T00:00:00Z"));
         assertThat(outboxEvent.getNextAttemptAt()).isEqualTo(Instant.parse("2026-07-18T00:00:00Z"));
         assertThat(history.getChangedAt()).isNotNull();

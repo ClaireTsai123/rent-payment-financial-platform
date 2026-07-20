@@ -8,6 +8,7 @@ import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyRecordRepo
 import com.claire.rentpaymentfinancialplatform.outbox.OutboxEventRepository;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlan;
 import com.claire.rentpaymentfinancialplatform.paymentplan.PaymentPlanRepository;
+import com.claire.rentpaymentfinancialplatform.settlement.SettlementRecordRepository;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementType;
 import com.claire.rentpaymentfinancialplatform.shared.domain.OutboxEventStatus;
@@ -52,11 +53,15 @@ class MoneyMovementStateTransitionServiceTests extends PostgresIntegrationTest {
     private ProviderWebhookEventRepository webhookEventRepository;
 
     @Autowired
+    private SettlementRecordRepository settlementRecordRepository;
+
+    @Autowired
     private MoneyMovementStateTransitionService transitionService;
 
     @BeforeEach
     void cleanDatabase() {
         webhookEventRepository.deleteAll();
+        settlementRecordRepository.deleteAll();
         providerTransactionRepository.deleteAll();
         paymentAttemptRepository.deleteAll();
         stateHistoryRepository.deleteAll();
