@@ -1,23 +1,29 @@
 package com.claire.rentpaymentfinancialplatform.shared.moneymovement;
 
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
+import com.claire.rentpaymentfinancialplatform.outbox.OutboxEventService;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MoneyMovementStateTransitionService {
 
     private final MoneyMovementRepository moneyMovementRepository;
     private final MoneyMovementStateHistoryRepository stateHistoryRepository;
+    private final OutboxEventService outboxEventService;
 
     public MoneyMovementStateTransitionService(
             MoneyMovementRepository moneyMovementRepository,
-            MoneyMovementStateHistoryRepository stateHistoryRepository
+            MoneyMovementStateHistoryRepository stateHistoryRepository,
+            OutboxEventService outboxEventService
     ) {
         this.moneyMovementRepository = moneyMovementRepository;
         this.stateHistoryRepository = stateHistoryRepository;
+        this.outboxEventService = outboxEventService;
     }
 
+    @Transactional
     public MoneyMovementStateTransitionResult transition(MoneyMovement moneyMovement, MoneyMovementState nextState, String reason) {
         MoneyMovementState currentState = moneyMovement.getState();
         if (currentState == nextState) {
@@ -31,13 +37,14 @@ public class MoneyMovementStateTransitionService {
 
         moneyMovement.transitionTo(nextState);
         moneyMovementRepository.saveAndFlush(moneyMovement);
-        stateHistoryRepository.saveAndFlush(new MoneyMovementStateHistory(
+        MoneyMovementStateHistory history = stateHistoryRepository.saveAndFlush(new MoneyMovementStateHistory(
                 UUID.randomUUID(),
                 moneyMovement,
                 currentState,
                 nextState,
                 reason
         ));
+        outboxEventService.recordMoneyMovementStateChanged(moneyMovement, history);
         return MoneyMovementStateTransitionResult.appliedTransition();
     }
 

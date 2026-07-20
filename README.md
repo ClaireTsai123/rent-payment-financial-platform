@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-7 only.
+Implemented scope: Phase 1 Tasks 1-8 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -16,6 +16,7 @@ Implemented scope: Phase 1 Tasks 1-7 only.
 - Payment-attempt creation, provider-transaction persistence, provider-result status mapping, money-movement state updates, and state-history append during provider submission
 - Mock-provider webhook ingestion with shared-secret signature verification, raw payload audit persistence, provider-event deduplication, and guarded state transitions
 - Centralized money-movement state-transition rules with invalid-regression rejection, no-op handling, and state-history creation
+- Transactional outbox persistence for meaningful money-movement state changes
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
@@ -145,8 +146,8 @@ publishing, SNS/SQS, settlement, and reconciliation remain out of scope for this
 
 Money-movement state changes are centralized in `MoneyMovementStateTransitionService`.
 The service mutates the `MoneyMovement`, appends `MoneyMovementStateHistory`, rejects
-invalid regressions, and treats same-state transitions as no-ops without creating
-duplicate history rows.
+invalid regressions, persists a pending outbox event for meaningful state changes, and
+treats same-state transitions as no-ops without creating duplicate history or outbox rows.
 
 Supported lifecycle transitions include movement initiation from `CREATED` into
 `SUBMITTED`, `PROCESSING`, `SUCCEEDED`, or `FAILED`; provider progression from
@@ -154,6 +155,23 @@ Supported lifecycle transitions include movement initiation from `CREATED` into
 from `PROCESSING` into `SUCCEEDED`, `FAILED`, `RETURNED`, or `REVERSED`; and realistic
 post-success `SUCCEEDED -> RETURNED` or `SUCCEEDED -> REVERSED` transitions. `FAILED`,
 `RETURNED`, and `REVERSED` are terminal for the current Phase 1 slice.
+
+## Transactional Outbox
+
+Meaningful money-movement state changes create a pending `OutboxEvent` in the same
+PostgreSQL transaction as the money-movement update and state-history row. Events use:
+
+- aggregate type: `MoneyMovement`
+- aggregate ID: the money movement ID
+- event type: `money-movement.state-changed`
+- status: `PENDING`
+- retry count: `0`
+- payload: stable JSON containing movement ID, payment plan ID, movement type, from/to state, reason, and change timestamp
+
+No outbox event is emitted for no-op transitions, rejected transitions, unmatched
+webhooks, ignored stale webhooks, idempotent API replay, or duplicate webhook delivery.
+Publishing, SNS/SQS fanout, consumers, retry execution, settlement, and reconciliation
+remain out of scope for this phase.
 
 ## Tests
 

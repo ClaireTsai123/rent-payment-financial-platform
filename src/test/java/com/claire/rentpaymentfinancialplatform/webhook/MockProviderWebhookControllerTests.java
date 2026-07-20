@@ -177,6 +177,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
 
         assertThat(webhookEventRepository.findAll()).hasSize(1);
         assertThat(stateHistoryRepository.findAll()).hasSize(2);
+        assertThat(outboxEventRepository.findAll()).hasSize(2);
         assertThat(providerTransactionRepository.findAll()).singleElement()
                 .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.SUCCEEDED));
     }
@@ -201,6 +202,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         assertThat(moneyMovementRepository.findAll()).singleElement()
                 .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.PROCESSING));
         assertThat(stateHistoryRepository.findAll()).hasSize(1);
+        assertThat(outboxEventRepository.findAll()).hasSize(1);
     }
 
     @ParameterizedTest
@@ -219,6 +221,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         assertThat(webhookEventRepository.findAll()).isEmpty();
         assertThat(providerTransactionRepository.findAll()).singleElement()
                 .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.PROCESSING));
+        assertThat(outboxEventRepository.findAll()).hasSize(1);
     }
 
     @ParameterizedTest
@@ -241,6 +244,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         });
         assertThat(providerTransactionRepository.findAll()).singleElement()
                 .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.PROCESSING));
+        assertThat(outboxEventRepository.findAll()).hasSize(1);
     }
 
     @ParameterizedTest
@@ -273,6 +277,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
                 .last()
                 .satisfies(event -> assertThat(event.getProcessingStatus()).isEqualTo(ProviderWebhookEventStatus.IGNORED));
         assertThat(stateHistoryRepository.findAll()).hasSize(2);
+        assertThat(outboxEventRepository.findAll()).hasSize(2);
     }
 
     private static Stream<ApiFlow> apiFlows() {

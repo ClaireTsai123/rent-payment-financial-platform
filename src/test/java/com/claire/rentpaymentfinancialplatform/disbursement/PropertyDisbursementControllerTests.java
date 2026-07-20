@@ -277,6 +277,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
         assertThat(paymentAttemptRepository.findAll()).hasSize(1);
         assertThat(providerTransactionRepository.findAll()).hasSize(1);
         assertThat(stateHistoryRepository.findAll()).hasSize(1);
+        assertThat(outboxEventRepository.findAll()).hasSize(1);
         assertThat(idempotencyRecordRepository.findAll()).singleElement().satisfies(record -> {
             assertThat(record.getResourceId()).isEqualTo(moneyMovementRepository.findAll().get(0).getId());
             assertThat(record.getResponsePayload()).isNotBlank();
