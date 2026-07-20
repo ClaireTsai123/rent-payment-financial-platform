@@ -131,6 +131,21 @@ public class OutboxEvent {
         return lastError;
     }
 
+    public void markPublished(Instant publishedAt) {
+        this.status = OutboxEventStatus.PUBLISHED;
+        this.publishedAt = publishedAt;
+        this.lastError = null;
+    }
+
+    public void recordPublishFailure(String lastError, Instant nextAttemptAt, int maxAttempts) {
+        attempts++;
+        this.lastError = lastError;
+        this.nextAttemptAt = nextAttemptAt;
+        if (attempts >= maxAttempts) {
+            this.status = OutboxEventStatus.FAILED;
+        }
+    }
+
     public Instant getPublishedAt() {
         return publishedAt;
     }

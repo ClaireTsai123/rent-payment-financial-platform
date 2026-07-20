@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-8 only.
+Implemented scope: Phase 1 Tasks 1-9 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -17,6 +17,7 @@ Implemented scope: Phase 1 Tasks 1-8 only.
 - Mock-provider webhook ingestion with shared-secret signature verification, raw payload audit persistence, provider-event deduplication, and guarded state transitions
 - Centralized money-movement state-transition rules with invalid-regression rejection, no-op handling, and state-history creation
 - Transactional outbox persistence for meaningful money-movement state changes
+- Scheduled outbox publisher with PostgreSQL-safe claiming, local mock event publishing, retry scheduling, and terminal failure handling
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
@@ -25,7 +26,6 @@ Implemented scope: Phase 1 Tasks 1-8 only.
 Not implemented yet:
 
 - Real provider integration
-- Outbox publishing
 - SNS/SQS consumers
 - Settlement and reconciliation workflows
 
@@ -60,6 +60,11 @@ SPRING_DATASOURCE_URL
 SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
 MOCK_PROVIDER_WEBHOOK_SECRET
+OUTBOX_PUBLISHER_BATCH_SIZE
+OUTBOX_PUBLISHER_MAX_ATTEMPTS
+OUTBOX_PUBLISHER_RETRY_DELAY
+OUTBOX_PUBLISHER_FIXED_DELAY
+OUTBOX_PUBLISHER_SCHEDULER_ENABLED
 ```
 
 Flyway owns schema creation. Hibernate is configured with `ddl-auto=validate`.
@@ -170,8 +175,21 @@ PostgreSQL transaction as the money-movement update and state-history row. Event
 
 No outbox event is emitted for no-op transitions, rejected transitions, unmatched
 webhooks, ignored stale webhooks, idempotent API replay, or duplicate webhook delivery.
-Publishing, SNS/SQS fanout, consumers, retry execution, settlement, and reconciliation
-remain out of scope for this phase.
+
+## Outbox Publishing
+
+`ScheduledOutboxPublisher` polls eligible `PENDING` outbox rows and delegates to
+`OutboxPublisher`. Claiming uses PostgreSQL `FOR UPDATE SKIP LOCKED` so overlapping
+scheduler executions do not publish the same row twice.
+
+The current `EventPublisher` implementation is a local mock publisher. It publishes the
+stored outbox payload exactly as persisted; it does not rebuild event content. Successful
+publishes mark rows `PUBLISHED` and set `published_at`. Failed publishes increment
+`attempts`, store `last_error`, and schedule the next retry with `next_attempt_at`.
+After the configured maximum attempts, rows are marked `FAILED`.
+
+Real SNS/SQS publishing, consumers, settlement, and reconciliation remain out of scope
+for this task.
 
 ## Tests
 
