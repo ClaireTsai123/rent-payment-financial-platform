@@ -3,10 +3,8 @@ package com.claire.rentpaymentfinancialplatform.webhook;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentAttemptStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.ProviderTransactionStatus;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovement;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementRepository;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistory;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistoryRepository;
+import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateTransitionResult;
+import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateTransitionService;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.PaymentAttempt;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.PaymentAttemptRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.ProviderTransaction;
@@ -29,23 +27,20 @@ public class MockProviderWebhookService {
     private final ProviderWebhookEventRepository webhookEventRepository;
     private final ProviderTransactionRepository providerTransactionRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
-    private final MoneyMovementRepository moneyMovementRepository;
-    private final MoneyMovementStateHistoryRepository stateHistoryRepository;
+    private final MoneyMovementStateTransitionService transitionService;
 
     public MockProviderWebhookService(
             @Value("${provider.webhook.mock-provider.shared-secret:local-mock-webhook-secret}") String sharedSecret,
             ProviderWebhookEventRepository webhookEventRepository,
             ProviderTransactionRepository providerTransactionRepository,
             PaymentAttemptRepository paymentAttemptRepository,
-            MoneyMovementRepository moneyMovementRepository,
-            MoneyMovementStateHistoryRepository stateHistoryRepository
+            MoneyMovementStateTransitionService transitionService
     ) {
         this.sharedSecret = sharedSecret;
         this.webhookEventRepository = webhookEventRepository;
         this.providerTransactionRepository = providerTransactionRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
-        this.moneyMovementRepository = moneyMovementRepository;
-        this.stateHistoryRepository = stateHistoryRepository;
+        this.transitionService = transitionService;
     }
 
     @Transactional
@@ -73,15 +68,16 @@ public class MockProviderWebhookService {
     }
 
     private ProviderWebhookResponse apply(ProviderWebhookEvent event, ProviderTransaction providerTransaction) {
-        if (!canApply(providerTransaction.getNormalizedStatus(), event.getNormalizedStatus())) {
-            event.ignored("Webhook status would regress a terminal provider transaction.");
+        PaymentAttempt paymentAttempt = providerTransaction.getPaymentAttempt();
+        MoneyMovementStateTransitionResult transitionResult = transitionService.transition(
+                providerTransaction.getMoneyMovement(),
+                toMoneyMovementState(event.getNormalizedStatus()),
+                reasonFor(event.getNormalizedStatus())
+        );
+        if (!transitionResult.applied() && !transitionResult.noOp()) {
+            event.ignored(transitionResult.rejectionReason());
             return new ProviderWebhookResponse(IGNORED);
         }
-
-        MoneyMovement moneyMovement = providerTransaction.getMoneyMovement();
-        PaymentAttempt paymentAttempt = providerTransaction.getPaymentAttempt();
-        MoneyMovementState previousState = moneyMovement.getState();
-        MoneyMovementState nextState = toMoneyMovementState(event.getNormalizedStatus());
 
         providerTransaction.recordProviderStatus(event.getNormalizedStatus(), event.getNormalizedStatus().name());
         paymentAttempt.recordProviderResult(
@@ -89,20 +85,9 @@ public class MockProviderWebhookService {
                 failureCodeFor(event.getNormalizedStatus()),
                 failureMessageFor(event.getNormalizedStatus())
         );
-        moneyMovement.transitionTo(nextState);
 
         providerTransactionRepository.saveAndFlush(providerTransaction);
         paymentAttemptRepository.saveAndFlush(paymentAttempt);
-        moneyMovementRepository.saveAndFlush(moneyMovement);
-        if (previousState != nextState) {
-            stateHistoryRepository.saveAndFlush(new MoneyMovementStateHistory(
-                    UUID.randomUUID(),
-                    moneyMovement,
-                    previousState,
-                    nextState,
-                    reasonFor(event.getNormalizedStatus())
-            ));
-        }
         event.applied();
         return new ProviderWebhookResponse(APPLIED);
     }
@@ -110,20 +95,6 @@ public class MockProviderWebhookService {
     private ProviderWebhookResponse unmatched(ProviderWebhookEvent event) {
         event.unmatched("No provider transaction matched this webhook.");
         return new ProviderWebhookResponse(UNMATCHED);
-    }
-
-    private static boolean canApply(ProviderTransactionStatus currentStatus, ProviderTransactionStatus nextStatus) {
-        if (!isTerminal(currentStatus)) {
-            return true;
-        }
-        return currentStatus == nextStatus;
-    }
-
-    private static boolean isTerminal(ProviderTransactionStatus status) {
-        return status == ProviderTransactionStatus.SUCCEEDED
-                || status == ProviderTransactionStatus.FAILED
-                || status == ProviderTransactionStatus.RETURNED
-                || status == ProviderTransactionStatus.REVERSED;
     }
 
     private static PaymentAttemptStatus toAttemptStatus(ProviderTransactionStatus providerStatus) {

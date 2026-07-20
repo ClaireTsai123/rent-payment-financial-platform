@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-6 only.
+Implemented scope: Phase 1 Tasks 1-7 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -15,6 +15,7 @@ Implemented scope: Phase 1 Tasks 1-6 only.
 - Provider adapter contract with a deterministic mock provider implementation
 - Payment-attempt creation, provider-transaction persistence, provider-result status mapping, money-movement state updates, and state-history append during provider submission
 - Mock-provider webhook ingestion with shared-secret signature verification, raw payload audit persistence, provider-event deduplication, and guarded state transitions
+- Centralized money-movement state-transition rules with invalid-regression rejection, no-op handling, and state-history creation
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
@@ -139,6 +140,20 @@ events are retained as `IGNORED`.
 Webhook signature verification, ingestion, deduplication, audit persistence, and local
 state updates are implemented. Webhook reprocessing, provider polling, retries, outbox
 publishing, SNS/SQS, settlement, and reconciliation remain out of scope for this task.
+
+## State Transitions
+
+Money-movement state changes are centralized in `MoneyMovementStateTransitionService`.
+The service mutates the `MoneyMovement`, appends `MoneyMovementStateHistory`, rejects
+invalid regressions, and treats same-state transitions as no-ops without creating
+duplicate history rows.
+
+Supported lifecycle transitions include movement initiation from `CREATED` into
+`SUBMITTED`, `PROCESSING`, `SUCCEEDED`, or `FAILED`; provider progression from
+`SUBMITTED` into `PROCESSING`, `SUCCEEDED`, or `FAILED`; provider/webhook resolution
+from `PROCESSING` into `SUCCEEDED`, `FAILED`, `RETURNED`, or `REVERSED`; and realistic
+post-success `SUCCEEDED -> RETURNED` or `SUCCEEDED -> REVERSED` transitions. `FAILED`,
+`RETURNED`, and `REVERSED` are terminal for the current Phase 1 slice.
 
 ## Tests
 

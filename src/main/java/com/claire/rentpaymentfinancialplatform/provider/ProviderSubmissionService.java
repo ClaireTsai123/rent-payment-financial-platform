@@ -4,9 +4,8 @@ import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.PaymentAttemptStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.ProviderTransactionStatus;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovement;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementRepository;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistory;
-import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateHistoryRepository;
+import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateTransitionResult;
+import com.claire.rentpaymentfinancialplatform.shared.moneymovement.MoneyMovementStateTransitionService;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.PaymentAttempt;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.PaymentAttemptRepository;
 import com.claire.rentpaymentfinancialplatform.shared.moneymovement.ProviderTransaction;
@@ -25,21 +24,18 @@ public class ProviderSubmissionService {
     private final PaymentProviderAdapter paymentProviderAdapter;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final ProviderTransactionRepository providerTransactionRepository;
-    private final MoneyMovementStateHistoryRepository stateHistoryRepository;
-    private final MoneyMovementRepository moneyMovementRepository;
+    private final MoneyMovementStateTransitionService transitionService;
 
     public ProviderSubmissionService(
             PaymentProviderAdapter paymentProviderAdapter,
             PaymentAttemptRepository paymentAttemptRepository,
             ProviderTransactionRepository providerTransactionRepository,
-            MoneyMovementStateHistoryRepository stateHistoryRepository,
-            MoneyMovementRepository moneyMovementRepository
+            MoneyMovementStateTransitionService transitionService
     ) {
         this.paymentProviderAdapter = paymentProviderAdapter;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.providerTransactionRepository = providerTransactionRepository;
-        this.stateHistoryRepository = stateHistoryRepository;
-        this.moneyMovementRepository = moneyMovementRepository;
+        this.transitionService = transitionService;
     }
 
     public void submit(MoneyMovement moneyMovement) {
@@ -68,16 +64,14 @@ public class ProviderSubmissionService {
                 providerResponse.rawStatus()
         ));
 
-        MoneyMovementState previousState = moneyMovement.getState();
-        moneyMovement.transitionTo(toMoneyMovementState(providerResponse.normalizedStatus()));
-        stateHistoryRepository.saveAndFlush(new MoneyMovementStateHistory(
-                UUID.randomUUID(),
+        MoneyMovementStateTransitionResult transitionResult = transitionService.transition(
                 moneyMovement,
-                previousState,
-                moneyMovement.getState(),
+                toMoneyMovementState(providerResponse.normalizedStatus()),
                 toStateHistoryReason(providerResponse.normalizedStatus())
-        ));
-        moneyMovementRepository.saveAndFlush(moneyMovement);
+        );
+        if (!transitionResult.applied() && !transitionResult.noOp()) {
+            throw new IllegalStateException(transitionResult.rejectionReason());
+        }
     }
 
     private static ProviderPaymentRequest toProviderRequest(MoneyMovement moneyMovement) {

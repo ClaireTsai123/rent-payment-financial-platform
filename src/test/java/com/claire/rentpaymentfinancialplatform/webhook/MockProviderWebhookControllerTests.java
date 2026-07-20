@@ -183,6 +183,28 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("apiFlows")
+    void sameStateWebhookIsAppliedWithoutDuplicateStateHistory(ApiFlow apiFlow) throws Exception {
+        ProviderTransaction providerTransaction = createSubmittedMovement(apiFlow, "ok");
+
+        sendWebhook(
+                "event-" + UUID.randomUUID(),
+                providerTransaction.getProviderTransactionId(),
+                ProviderTransactionStatus.PROCESSING,
+                WEBHOOK_SECRET
+        ).andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("APPLIED"));
+
+        assertThat(webhookEventRepository.findAll()).singleElement()
+                .satisfies(event -> assertThat(event.getProcessingStatus()).isEqualTo(ProviderWebhookEventStatus.APPLIED));
+        assertThat(providerTransactionRepository.findAll()).singleElement()
+                .satisfies(transaction -> assertThat(transaction.getNormalizedStatus()).isEqualTo(ProviderTransactionStatus.PROCESSING));
+        assertThat(moneyMovementRepository.findAll()).singleElement()
+                .satisfies(moneyMovement -> assertThat(moneyMovement.getState()).isEqualTo(MoneyMovementState.PROCESSING));
+        assertThat(stateHistoryRepository.findAll()).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("apiFlows")
     void rejectsInvalidSignature(ApiFlow apiFlow) throws Exception {
         ProviderTransaction providerTransaction = createSubmittedMovement(apiFlow, "ok");
 
