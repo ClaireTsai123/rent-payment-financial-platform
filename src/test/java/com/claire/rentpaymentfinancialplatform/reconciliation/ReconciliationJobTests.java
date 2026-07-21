@@ -1,6 +1,7 @@
 package com.claire.rentpaymentfinancialplatform.reconciliation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.claire.rentpaymentfinancialplatform.PostgresIntegrationTest;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyRecordRepository;
@@ -37,7 +38,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest
+@SpringBootTest(properties = "reconciliation.settlement.chunk-size=1")
 @ActiveProfiles("test")
 class ReconciliationJobTests extends PostgresIntegrationTest {
 
@@ -182,6 +183,86 @@ class ReconciliationJobTests extends PostgresIntegrationTest {
         assertThat(reconciliationRunRepository.findAll()).hasSize(1);
         assertThat(reconciliationExceptionRepository.findAll()).isEmpty();
         assertThat(settlementRecordRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void chunkProcessingAppliesMixedRowsAcrossChunkCommits() throws Exception {
+        SettlementRecord firstSettlement = seedExpectedSettlement("provider-txn-" + UUID.randomUUID(), "100.00", "1.00", "99.00");
+        SettlementRecord secondSettlement = seedExpectedSettlement("provider-txn-" + UUID.randomUUID(), "75.00", "0.50", "74.50");
+        Path sourceFile = settlementFile(
+                "chunked.csv",
+                row(firstSettlement, "100.00", "1.00", "99.00"),
+                "mock-provider,missing-provider-txn,45.00,0.00,45.00,USD,2026-08-02,batch-001",
+                row(secondSettlement, "75.00", "0.50", "74.50")
+        );
+
+        ReconciliationRun run = reconciliationJobLauncher.reconcileProviderSettlementFile(sourceFile.toString());
+
+        assertThat(run.getStatus()).isEqualTo(ReconciliationRunStatus.COMPLETED);
+        assertThat(run.getTotalRows()).isEqualTo(3);
+        assertThat(run.getMatchedRows()).isEqualTo(2);
+        assertThat(run.getExceptionRows()).isEqualTo(1);
+        assertThat(settlementRecordRepository.findById(firstSettlement.getId())).get()
+                .satisfies(reloaded -> assertThat(reloaded.getStatus()).isEqualTo(SettlementStatus.SETTLED));
+        assertThat(settlementRecordRepository.findById(secondSettlement.getId())).get()
+                .satisfies(reloaded -> assertThat(reloaded.getStatus()).isEqualTo(SettlementStatus.SETTLED));
+        assertThat(reconciliationExceptionRepository.findAll()).singleElement()
+                .satisfies(exception -> assertThat(exception.getExceptionType()).isEqualTo(ReconciliationExceptionType.MISSING_SETTLEMENT));
+    }
+
+    @Test
+    void malformedRowsFailTheRunAndPreserveAuditRecord() throws Exception {
+        Path sourceFile = settlementFile("malformed.csv", "malformed-row");
+
+        assertThatThrownBy(() -> reconciliationJobLauncher.reconcileProviderSettlementFile(sourceFile.toString()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Provider settlement reconciliation job failed.");
+
+        assertThat(reconciliationRunRepository.findBySourceFile(sourceFile.toString())).get()
+                .satisfies(run -> {
+                    assertThat(run.getStatus()).isEqualTo(ReconciliationRunStatus.FAILED);
+                    assertThat(run.getFailureReason()).contains("Settlement file row has invalid column count");
+                });
+        assertThat(reconciliationExceptionRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void failedRunCanRestartFromCommittedChunkAfterFileCorrection() throws Exception {
+        SettlementRecord firstSettlement = seedExpectedSettlement("provider-txn-" + UUID.randomUUID(), "100.00", "0.00", "100.00");
+        SettlementRecord secondSettlement = seedExpectedSettlement("provider-txn-" + UUID.randomUUID(), "80.00", "0.00", "80.00");
+        Path sourceFile = settlementFile(
+                "partial-failure.csv",
+                row(firstSettlement, "100.00", "0.00", "100.00"),
+                "malformed-row"
+        );
+
+        assertThatThrownBy(() -> reconciliationJobLauncher.reconcileProviderSettlementFile(sourceFile.toString()))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(reconciliationRunRepository.findBySourceFile(sourceFile.toString())).get()
+                .satisfies(run -> assertThat(run.getStatus()).isEqualTo(ReconciliationRunStatus.FAILED));
+        assertThat(settlementRecordRepository.findById(firstSettlement.getId())).get()
+                .satisfies(reloaded -> assertThat(reloaded.getStatus()).isEqualTo(SettlementStatus.SETTLED));
+        assertThat(settlementRecordRepository.findById(secondSettlement.getId())).get()
+                .satisfies(reloaded -> assertThat(reloaded.getStatus()).isEqualTo(SettlementStatus.EXPECTED));
+
+        Files.writeString(
+                sourceFile,
+                HEADER + System.lineSeparator()
+                        + row(firstSettlement, "100.00", "0.00", "100.00") + System.lineSeparator()
+                        + row(secondSettlement, "80.00", "0.00", "80.00")
+        );
+
+        ReconciliationRun restartedRun = reconciliationJobLauncher.reconcileProviderSettlementFile(sourceFile.toString());
+
+        assertThat(restartedRun.getStatus()).isEqualTo(ReconciliationRunStatus.COMPLETED);
+        assertThat(restartedRun.getTotalRows()).isEqualTo(2);
+        assertThat(restartedRun.getMatchedRows()).isEqualTo(2);
+        assertThat(restartedRun.getExceptionRows()).isZero();
+        assertThat(reconciliationRunRepository.findAll()).hasSize(1);
+        assertThat(reconciliationExceptionRepository.findAll()).isEmpty();
+        assertThat(settlementRecordRepository.findById(secondSettlement.getId())).get()
+                .satisfies(reloaded -> assertThat(reloaded.getStatus()).isEqualTo(SettlementStatus.SETTLED));
     }
 
     private SettlementRecord seedExpectedSettlement(String providerTransactionReference, String gross, String fee, String net) {

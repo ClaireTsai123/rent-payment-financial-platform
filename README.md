@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-11 only.
+Implemented scope: Phase 1 Tasks 1-12 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -19,7 +19,7 @@ Implemented scope: Phase 1 Tasks 1-11 only.
 - Transactional outbox persistence for meaningful money-movement state changes
 - Scheduled outbox publisher with PostgreSQL-safe claiming, local mock event publishing, retry scheduling, and terminal failure handling
 - Expected settlement record creation when provider-confirmed money movements reach `SUCCEEDED`
-- Spring Batch provider-settlement reconciliation job using a local S3-style CSV input file
+- Chunk-oriented Spring Batch provider-settlement reconciliation job using a local S3-style CSV input file
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
@@ -68,6 +68,7 @@ OUTBOX_PUBLISHER_MAX_ATTEMPTS
 OUTBOX_PUBLISHER_RETRY_DELAY
 OUTBOX_PUBLISHER_FIXED_DELAY
 OUTBOX_PUBLISHER_SCHEDULER_ENABLED
+RECONCILIATION_SETTLEMENT_CHUNK_SIZE
 ```
 
 Flyway owns schema creation. Hibernate is configured with `ddl-auto=validate`.
@@ -111,8 +112,8 @@ idempotency key is currently derived from the same operation key to preserve bac
 compatibility and fit the existing provider idempotency column; future provider-specific
 adapters can change that derivation behind the adapter boundary.
 
-Webhook reprocessing, retry policy, polling, settlement, and reconciliation are intentionally
-left for later Phase 1 tasks.
+Webhook reprocessing, retry policy, polling, and advanced provider-status recovery are
+intentionally left for later tasks.
 
 ## Provider Webhooks
 
@@ -200,27 +201,33 @@ When a provider-backed money movement reaches `SUCCEEDED`, the application creat
 `SettlementRecord` with status `EXPECTED`. The record captures expected gross amount,
 expected fee amount, expected net amount, currency, expected settlement date, provider,
 and provider transaction reference. Actual settlement amounts, provider batch references,
-mismatch detection, and reconciliation remain for later Phase 1 work.
+and mismatch status are populated by the provider-settlement reconciliation job.
 
 Duplicate webhook replay and already-existing settlement expectations do not create
 additional settlement rows.
 
 ## Reconciliation
 
-`providerSettlementReconciliationJob` is a Spring Batch job that reads a local
-provider-settlement CSV file as an S3-style immutable source file reference. The current
-file format is:
+`providerSettlementReconciliationJob` is a chunk-oriented Spring Batch job that reads
+provider-settlement CSV files through a `SettlementFileSource` abstraction. The current
+implementation resolves local files, while the interface keeps the source boundary ready
+for a future S3 implementation. The current file format is:
 
 ```text
 provider,providerTransactionReference,grossAmount,feeAmount,netAmount,currency,settlementDate,providerBatchReference
 mock-provider,mock-txn-123,500.00,0.00,500.00,USD,2026-08-02,batch-001
 ```
 
-The job records one `ReconciliationRun` per source file. Completed source-file reruns
-return the existing run and do not duplicate results. Matched rows update
-`SettlementRecord` from `EXPECTED` to `SETTLED`. Missing internal settlements, amount
-mismatches, and duplicate provider references create `ReconciliationExceptionRecord`
-rows for operations review; amount mismatches mark the settlement `MISMATCHED`.
+The job uses a `FlatFileItemReader`, `ItemProcessor`, and `ItemWriter` with configurable
+chunk size. It records one `ReconciliationRun` per source file. Completed source-file
+reruns return the existing run and do not duplicate results. Failed runs can be restarted
+for the same source file, with Spring Batch checkpointing preserving committed chunks.
+
+Matched rows update `SettlementRecord` from `EXPECTED` to `SETTLED`. Missing internal
+settlements, amount mismatches, and duplicate provider references create
+`ReconciliationExceptionRecord` rows for operations review; amount mismatches mark the
+settlement `MISMATCHED`. Malformed files fail the reconciliation run while preserving the
+run audit record and root failure reason.
 
 This phase does not use real S3, real provider files, SNS/SQS consumers, settlement ops
 UI, or manual exception workflows.

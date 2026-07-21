@@ -12,6 +12,11 @@ record ProviderSettlementFileRow(
         String currency,
         LocalDate settlementDate,
         String providerBatchReference,
-        String rawRecord
+        String rawRecord,
+        boolean blank
 ) {
+
+    static ProviderSettlementFileRow blank(String rawRecord) {
+        return new ProviderSettlementFileRow(null, null, null, null, null, null, null, null, rawRecord, true);
+    }
 }

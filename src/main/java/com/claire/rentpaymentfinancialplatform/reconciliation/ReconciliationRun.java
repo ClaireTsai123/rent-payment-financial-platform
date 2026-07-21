@@ -89,6 +89,13 @@ public class ReconciliationRun {
         this.failureReason = null;
     }
 
+    public void restart() {
+        this.status = ReconciliationRunStatus.STARTED;
+        this.startedAt = Instant.now();
+        this.completedAt = null;
+        this.failureReason = null;
+    }
+
     public void fail(String failureReason) {
         this.status = ReconciliationRunStatus.FAILED;
         this.failureReason = failureReason;
