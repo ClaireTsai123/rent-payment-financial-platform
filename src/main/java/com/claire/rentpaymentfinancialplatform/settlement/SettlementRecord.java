@@ -140,6 +140,24 @@ public class SettlementRecord {
         updatedAt = Instant.now();
     }
 
+    public void settle(BigDecimal actualGrossAmount, BigDecimal actualFeeAmount, BigDecimal actualNetAmount, LocalDate actualSettlementDate, String providerBatchReference) {
+        this.status = SettlementStatus.SETTLED;
+        this.actualGrossAmount = actualGrossAmount;
+        this.actualFeeAmount = actualFeeAmount;
+        this.actualNetAmount = actualNetAmount;
+        this.actualSettlementDate = actualSettlementDate;
+        this.providerBatchReference = providerBatchReference;
+    }
+
+    public void mismatch(BigDecimal actualGrossAmount, BigDecimal actualFeeAmount, BigDecimal actualNetAmount, LocalDate actualSettlementDate, String providerBatchReference) {
+        this.status = SettlementStatus.MISMATCHED;
+        this.actualGrossAmount = actualGrossAmount;
+        this.actualFeeAmount = actualFeeAmount;
+        this.actualNetAmount = actualNetAmount;
+        this.actualSettlementDate = actualSettlementDate;
+        this.providerBatchReference = providerBatchReference;
+    }
+
     public UUID getId() {
         return id;
     }

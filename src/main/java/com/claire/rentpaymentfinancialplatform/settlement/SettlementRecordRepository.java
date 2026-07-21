@@ -10,4 +10,6 @@ public interface SettlementRecordRepository extends JpaRepository<SettlementReco
 
     @Query("select s from SettlementRecord s where s.moneyMovement.id = :moneyMovementId")
     Optional<SettlementRecord> findByMoneyMovementId(@Param("moneyMovementId") UUID moneyMovementId);
+
+    Optional<SettlementRecord> findByProviderAndProviderTransactionReference(String provider, String providerTransactionReference);
 }

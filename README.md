@@ -6,7 +6,7 @@ The blueprint is the canonical source of truth for scope, architecture, technolo
 
 ## Current Scope
 
-Implemented scope: Phase 1 Tasks 1-10 only.
+Implemented scope: Phase 1 Tasks 1-11 only.
 
 - Core payment-plan and money-movement persistence model
 - Renter collection API that creates and immediately submits a collection money movement for an existing payment plan
@@ -19,6 +19,7 @@ Implemented scope: Phase 1 Tasks 1-10 only.
 - Transactional outbox persistence for meaningful money-movement state changes
 - Scheduled outbox publisher with PostgreSQL-safe claiming, local mock event publishing, retry scheduling, and terminal failure handling
 - Expected settlement record creation when provider-confirmed money movements reach `SUCCEEDED`
+- Spring Batch provider-settlement reconciliation job using a local S3-style CSV input file
 - Payment attempts, provider transaction references, and money-movement state history
 - Idempotency, provider webhook, and outbox persistence records
 - Flyway-managed database schema
@@ -28,7 +29,7 @@ Not implemented yet:
 
 - Real provider integration
 - SNS/SQS consumers
-- Settlement file matching and reconciliation workflows
+- Additional settlement and reconciliation workflows
 
 ## Technology
 
@@ -38,6 +39,7 @@ Not implemented yet:
 - Spring Data JPA / Hibernate
 - PostgreSQL
 - Flyway
+- Spring Batch
 - Gradle
 - JUnit 5
 - Testcontainers
@@ -202,6 +204,26 @@ mismatch detection, and reconciliation remain for later Phase 1 work.
 
 Duplicate webhook replay and already-existing settlement expectations do not create
 additional settlement rows.
+
+## Reconciliation
+
+`providerSettlementReconciliationJob` is a Spring Batch job that reads a local
+provider-settlement CSV file as an S3-style immutable source file reference. The current
+file format is:
+
+```text
+provider,providerTransactionReference,grossAmount,feeAmount,netAmount,currency,settlementDate,providerBatchReference
+mock-provider,mock-txn-123,500.00,0.00,500.00,USD,2026-08-02,batch-001
+```
+
+The job records one `ReconciliationRun` per source file. Completed source-file reruns
+return the existing run and do not duplicate results. Matched rows update
+`SettlementRecord` from `EXPECTED` to `SETTLED`. Missing internal settlements, amount
+mismatches, and duplicate provider references create `ReconciliationExceptionRecord`
+rows for operations review; amount mismatches mark the settlement `MISMATCHED`.
+
+This phase does not use real S3, real provider files, SNS/SQS consumers, settlement ops
+UI, or manual exception workflows.
 
 ## Tests
 
