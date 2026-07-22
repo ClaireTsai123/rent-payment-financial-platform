@@ -5,8 +5,9 @@ This repository implements the modular Spring Boot Rent Payment Application desc
 The blueprint remains the canonical source of truth for scope, architecture decisions,
 technology choices, and interview narrative.
 
-Current implementation checkpoint: **Phase 1 Tasks 1-12** plus the first
-full-stack enablement slice for local/dev authentication and renter-scoped read APIs.
+Current implementation checkpoint: **Phase 1 Tasks 1-12** plus the first two
+full-stack enablement slices: local/dev authentication, renter-scoped read APIs, and a
+React renter portal foundation under `frontend/`.
 
 For a fuller Phase 1 documentation checkpoint and full-stack roadmap, see
 [`docs/Phase_1_Documentation_Checkpoint.md`](docs/Phase_1_Documentation_Checkpoint.md).
@@ -28,6 +29,8 @@ Implemented Phase 1 flows:
 - Authenticate renter-facing and internal command APIs through a replaceable local/dev
   bearer-token principal in local/dev/test profiles.
 - Expose renter-scoped read APIs for payment plans and money movements.
+- Provide a local/dev React renter portal foundation that reads renter-scoped plans and
+  money movements and initiates renter collections through the existing command API.
 
 Billing, Risk, and Ledger remain external/shared boundaries. The application does not
 create unnecessary microservices and does not introduce Kafka, Eureka, OpenFeign,
@@ -65,6 +68,11 @@ The code is one Spring Boot deployable organized into explicit modules:
 - `security`: stateless Spring Security configuration and replaceable dev principal
 - `renter`: renter-scoped portal read/query APIs and DTOs
 - `shared`: domain enums, money movement entities, state-transition service, API errors
+
+The repository also contains one frontend application:
+
+- `frontend`: React, TypeScript, Vite, React Router, TanStack Query renter portal
+  foundation for local/dev full-stack validation
 
 ## End-to-End Flows
 
@@ -324,12 +332,12 @@ Flyway owns schema creation. Hibernate runs with `ddl-auto=validate`.
 
 Current migrations:
 
-| Migration | Scope |
-| --- | --- |
-| `V1__create_payment_core_tables.sql` | payment plans, money movements, attempts, provider transactions, state history, idempotency, outbox |
-| `V2__create_provider_webhook_events.sql` | webhook event audit and provider event deduplication |
-| `V3__create_settlement_records.sql` | expected and actual settlement tracking |
-| `V4__create_reconciliation_tables.sql` | reconciliation runs and exception records |
+| Migration                                | Scope                                                                                               |
+|------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `V1__create_payment_core_tables.sql`     | payment plans, money movements, attempts, provider transactions, state history, idempotency, outbox |
+| `V2__create_provider_webhook_events.sql` | webhook event audit and provider event deduplication                                                |
+| `V3__create_settlement_records.sql`      | expected and actual settlement tracking                                                             |
+| `V4__create_reconciliation_tables.sql`   | reconciliation runs and exception records                                                           |
 
 Important constraints include:
 
@@ -461,6 +469,18 @@ descending. Requested page sizes are capped at 100.
 
 ## Local Development
 
+Frontend development is standardized on **Node 22 LTS**. The repository includes a
+root `.nvmrc`; do not use Node 23 for frontend install, test, lint, build, or dev-server
+work.
+
+```bash
+nvm install
+nvm use
+node --version
+```
+
+The frontend `package.json` enforces `node >=22.13.0 <23`.
+
 The application defaults to local PostgreSQL:
 
 ```text
@@ -494,6 +514,32 @@ Run the application after PostgreSQL is available:
 
 ```bash
 ./gradlew bootRun
+```
+
+For local full-stack development, `bootRun` activates the `local` Spring profile by
+default so the replaceable dev bearer-token filter is registered. Override it explicitly
+when needed:
+
+```bash
+SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
+./gradlew bootRun -Dspring.profiles.active=prod
+```
+
+Run the renter portal after installing frontend dependencies:
+
+```bash
+cd frontend
+nvm use
+npm install
+npm run dev
+```
+
+The Vite dev server proxies `/api` and `/actuator` to `http://localhost:8080`, so the
+current repository does not need backend CORS changes for local full-stack development.
+Use a local/dev renter token such as:
+
+```text
+dev:test-user:renter-123:RENTER
 ```
 
 There is not currently a Docker Compose file in the repository.
@@ -549,7 +595,7 @@ Not yet implemented:
 - Real S3 file source
 - Production OAuth2/JWT integration
 - Internal operations query APIs
-- Renter-facing portal
+- Production-grade renter-facing portal
 - Internal financial-operations portal
 - Docker Compose/local full-stack orchestration
 - Production deployment artifacts
@@ -623,6 +669,17 @@ frontend/
     hooks/
     utils/
 ```
+
+Current frontend implementation:
+
+- Local/dev token entry and storage for the existing bearer-token filter
+- Protected renter portal shell
+- Dashboard listing `/api/v1/me/payment-plans` and `/api/v1/me/money-movements`
+- Payment-plan detail page with plan-scoped movement history
+- Money-movement detail page
+- Renter collection initiation using `POST /api/v1/renter-collections` with an
+  idempotency key
+- Vite dev proxy for local Spring Boot integration
 
 Recommended full-stack phases:
 

@@ -36,6 +36,9 @@ Full-stack enablement started:
 - Pagination through Spring `Pageable`
 - Renter ownership checks for read and command endpoints
 - FINOPS/ADMIN authorization for property disbursement commands
+- React/TypeScript renter portal foundation under `frontend/`
+- Local/dev token entry, protected renter shell, dashboard, detail pages, and renter
+  collection initiation against existing APIs
 
 ## Business Scope
 
@@ -68,6 +71,17 @@ The service does not own:
 | `reconciliation`       | Chunk-oriented Spring Batch file reconciliation                             |
 | `security`             | Stateless security configuration and replaceable dev principal              |
 | `renter`               | Renter portal read/query APIs and DTOs                                      |
+
+## Current Frontend Module
+
+| Module       | Implemented responsibility                                            |
+|--------------|------------------------------------------------------------------------|
+| `frontend`   | React/Vite renter portal foundation for local/dev full-stack validation |
+
+The frontend currently uses React, TypeScript, React Router, TanStack Query, and a Vite
+dev-server proxy to the Spring Boot API. It stores a local/dev bearer token in browser
+local storage, reads renter-scoped payment plans and money movements from `/api/v1/me/**`,
+and initiates renter collections through the existing idempotent command endpoint.
 
 ## Current Runtime Flow
 
@@ -232,6 +246,18 @@ Authorization: Bearer dev:<subject>:<renterId>:<comma-separated-roles>
 The dev bearer-token filter is profile-gated to `local`, `dev`, and `test`; it is not
 registered for production profiles.
 
+Frontend local/dev token entry accepts the raw token value, for example:
+
+```text
+dev:test-user:renter-123:RENTER
+```
+
+API requests send it as:
+
+```text
+Authorization: Bearer dev:test-user:renter-123:RENTER
+```
+
 ## Testing Checkpoint
 
 Testing is PostgreSQL-backed through Testcontainers. The suite covers:
@@ -267,6 +293,8 @@ Current local assumptions:
 - `spring.batch.job.enabled=false`
 - `spring.batch.jdbc.initialize-schema=always`
 - Testcontainers for integration tests
+- Node.js/npm for the optional `frontend/` local renter portal
+- Vite proxy from the frontend dev server to Spring Boot on port `8080`
 
 There is currently no Docker Compose configuration in the repository.
 
@@ -323,7 +351,10 @@ Remaining backend gaps:
 - Constrained exact search by IDs and provider references
 - CORS configuration for a frontend dev server
 
-Recommended React/TypeScript structure:
+The current frontend avoids that backend CORS gap in local development by using the Vite
+proxy. Production deployment should use explicit allowed origins at the API edge.
+
+Implemented React/TypeScript structure:
 
 ```text
 frontend/
@@ -346,6 +377,15 @@ frontend/
     utils/
 ```
 
+Current repository implementation:
+
+- `frontend/src/auth`: local/dev token context and protected route
+- `frontend/src/api`: typed API client for renter-scoped reads and collection command
+- `frontend/src/pages/renter`: dev token page, dashboard, payment-plan detail, and
+  money-movement detail
+- `frontend/src/components`: layout, status, money, and feedback components
+- `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
+
 ## Production Direction
 
 Future production hardening should add:
@@ -366,12 +406,11 @@ Future production hardening should add:
 
 Continue with the renter portal slice:
 
-1. Scaffold a React/TypeScript frontend.
-2. Add auth token handling for local/dev.
-3. Add renter dashboard and payment-plan detail page.
-4. Read payment plans and money movements from `/api/v1/me/**`.
-5. Reuse the existing collection command endpoint with idempotency and renter ownership
-   checks.
+1. Add seeded local data or a development fixture flow for end-to-end demo setup.
+2. Add collection result confirmation and error-specific recovery copy.
+3. Add pagination controls for payment plans and money movement history.
+4. Add production OAuth2/JWT integration behind the same frontend auth boundary.
+5. Add operations query APIs before building the internal financial-operations portal.
 
 This creates a real full-stack path without disturbing the established financial domain
 logic.
