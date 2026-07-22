@@ -112,4 +112,8 @@ public class ReconciliationExceptionRecord {
     public String getRawRecord() {
         return rawRecord;
     }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

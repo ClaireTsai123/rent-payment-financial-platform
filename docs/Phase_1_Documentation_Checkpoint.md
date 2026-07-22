@@ -43,6 +43,9 @@ Full-stack enablement started:
   payment plans plus renter-visible money movements
 - Local/dev terminal-state demo script that applies mock-provider webhooks to
   portal-created collections without adding privileged controls to the renter UI
+- Secured internal operations read APIs for `SUPPORT`, `FINOPS`, and `ADMIN` covering
+  money movements, provider transactions, webhook events, outbox events, settlement
+  records, reconciliation runs, and reconciliation exceptions
 
 ## Business Scope
 
@@ -75,6 +78,7 @@ The service does not own:
 | `reconciliation`       | Chunk-oriented Spring Batch file reconciliation                             |
 | `security`             | Stateless security configuration and replaceable dev principal              |
 | `renter`               | Renter portal read/query APIs and DTOs                                      |
+| `operations`           | Secured internal operations read/query APIs and DTOs                        |
 | `devsupport`           | Local/dev-only demo fixture seeding for full-stack portal validation        |
 
 ## Current Frontend Module
@@ -219,6 +223,7 @@ Flyway migrations:
 - `V2__create_provider_webhook_events.sql`
 - `V3__create_settlement_records.sql`
 - `V4__create_reconciliation_tables.sql`
+- `V5__add_operations_read_indexes.sql`
 
 ## Current API Surface
 
@@ -238,10 +243,39 @@ Renter read APIs:
 Renter list APIs default to `size=20` with newest-first sorting by `createdAt` descending.
 Requested page sizes are capped at 100.
 
+Internal operations read APIs:
+
+- `GET /api/v1/ops/money-movements`
+- `GET /api/v1/ops/money-movements/{id}`
+- `GET /api/v1/ops/provider-transactions`
+- `GET /api/v1/ops/provider-transactions/{id}`
+- `GET /api/v1/ops/provider-webhook-events`
+- `GET /api/v1/ops/provider-webhook-events/{id}`
+- `GET /api/v1/ops/outbox-events`
+- `GET /api/v1/ops/outbox-events/{id}`
+- `GET /api/v1/ops/settlement-records`
+- `GET /api/v1/ops/settlement-records/{id}`
+- `GET /api/v1/ops/reconciliation-runs`
+- `GET /api/v1/ops/reconciliation-runs/{id}`
+- `GET /api/v1/ops/reconciliation-exceptions`
+- `GET /api/v1/ops/reconciliation-exceptions/{id}`
+
+Operations APIs require role `SUPPORT`, `FINOPS`, or `ADMIN`, return DTOs only, and use
+the same default `size=20` and max `size=100` paging policy. Filters are exact-match or
+bounded date/range filters for state, type, provider, status, lifecycle dates, exact IDs,
+and provider references.
+
+`V5__add_operations_read_indexes.sql` adds targeted indexes for these operations list
+views, including lifecycle timestamp sorting, state/status filters, provider references,
+outbox aggregate lookup, settlement provider references, and reconciliation exception
+triage. Existing primary keys and unique provider-reference constraints are reused where
+they already support exact lookup.
+
 The `/api/v1/me/**` and collection endpoints require a local/dev/test bearer token with
 role `RENTER`. Property disbursement requires role `FINOPS` or `ADMIN` and does not derive
-renter ownership from the authenticated principal. The webhook endpoint remains protected
-by provider shared-secret verification. There are no internal operations query APIs yet.
+renter ownership from the authenticated principal. Operations read APIs require
+`SUPPORT`, `FINOPS`, or `ADMIN`. The webhook endpoint remains protected by provider
+shared-secret verification.
 
 Local/dev token format:
 
@@ -286,6 +320,8 @@ Testing is PostgreSQL-backed through Testcontainers. The suite covers:
 - renter-scoped read API pagination and ownership protection
 - command endpoint payment-plan ownership protection
 - FINOPS/ADMIN authorization for property disbursement
+- SUPPORT/FINOPS/ADMIN authorization for operations read APIs
+- operations read API pagination, filters, exact lookup, detail views, and validation
 - production-profile absence of the dev bearer-token filter
 
 ## Local Development Checkpoint
@@ -357,10 +393,7 @@ Recommended operations pages:
 Remaining backend gaps:
 
 - Production OAuth2/JWT resource-server integration
-- Operations query APIs
-- Support and finance-operations role surfaces
-- Filtering by state/status/type/provider/date
-- Constrained exact search by IDs and provider references
+- Operations write/manual-resolution workflows
 - CORS configuration for a frontend dev server
 
 The current frontend avoids that backend CORS gap in local development by using the Vite
@@ -400,6 +433,8 @@ Current repository implementation:
 - `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
 - `scripts/demo/mock-provider-webhook.sh`: local/dev helper for moving a processing
   mock-provider transaction to a terminal status through the existing webhook contract
+- `src/main/java/com/claire/rentpaymentfinancialplatform/operations`: secured read-only
+  operations APIs and DTO mapping
 
 ## Production Direction
 
@@ -422,10 +457,10 @@ Future production hardening should add:
 Continue with production-readiness enablement:
 
 1. Add production OAuth2/JWT integration behind the same frontend auth boundary.
-2. Add operations query APIs before building the internal financial-operations portal.
+2. Build the internal operations portal read-only slice on top of the new operations APIs.
 3. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
    backend, and frontend.
-4. Add read-side filtering once the operations query APIs are introduced.
+4. Add operations filtering UX and constrained search controls in the operations portal.
 5. Add provider ambiguity/status-polling runbooks and internal tools before any
    production provider integration.
 

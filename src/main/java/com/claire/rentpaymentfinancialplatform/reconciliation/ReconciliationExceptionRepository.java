@@ -4,10 +4,11 @@ import java.util.List;
 import java.util.UUID;
 import com.claire.rentpaymentfinancialplatform.shared.domain.ReconciliationExceptionType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ReconciliationExceptionRepository extends JpaRepository<ReconciliationExceptionRecord, UUID> {
+public interface ReconciliationExceptionRepository extends JpaRepository<ReconciliationExceptionRecord, UUID>, JpaSpecificationExecutor<ReconciliationExceptionRecord> {
 
     List<ReconciliationExceptionRecord> findByReconciliationRunId(UUID reconciliationRunId);
 

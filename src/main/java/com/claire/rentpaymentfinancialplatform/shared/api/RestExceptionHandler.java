@@ -3,11 +3,14 @@ package com.claire.rentpaymentfinancialplatform.shared.api;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyConflictException;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyExpiredException;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyInProgressException;
+import com.claire.rentpaymentfinancialplatform.operations.OperationsInvalidFilterException;
+import com.claire.rentpaymentfinancialplatform.operations.OperationsResourceNotFoundException;
 import com.claire.rentpaymentfinancialplatform.renter.MoneyMovementNotFoundException;
 import com.claire.rentpaymentfinancialplatform.webhook.WebhookSignatureException;
 import java.time.Instant;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +30,18 @@ public class RestExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     ApiErrorResponse handleMoneyMovementNotFound(MoneyMovementNotFoundException exception) {
         return new ApiErrorResponse("MONEY_MOVEMENT_NOT_FOUND", exception.getMessage(), Instant.now());
+    }
+
+    @ExceptionHandler(OperationsResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    ApiErrorResponse handleOperationsResourceNotFound(OperationsResourceNotFoundException exception) {
+        return new ApiErrorResponse("OPERATIONS_RESOURCE_NOT_FOUND", exception.getMessage(), Instant.now());
+    }
+
+    @ExceptionHandler(OperationsInvalidFilterException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ApiErrorResponse handleOperationsInvalidFilter(OperationsInvalidFilterException exception) {
+        return new ApiErrorResponse("INVALID_FILTER", exception.getMessage(), Instant.now());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -63,6 +78,16 @@ public class RestExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     ApiErrorResponse handleValidationFailure(MethodArgumentNotValidException exception) {
         return new ApiErrorResponse("VALIDATION_FAILED", "Request validation failed.", Instant.now());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ApiErrorResponse handleArgumentTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return new ApiErrorResponse(
+                "INVALID_REQUEST_PARAMETER",
+                "Invalid value for request parameter: " + exception.getName(),
+                Instant.now()
+        );
     }
 
     @ExceptionHandler(WebhookSignatureException.class)

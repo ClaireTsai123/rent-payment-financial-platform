@@ -12,4 +12,12 @@ public final class SecurityTestSupport {
     public static String finopsToken() {
         return "Bearer dev:finops-user:-:FINOPS";
     }
+
+    public static String supportToken() {
+        return "Bearer dev:support-user:-:SUPPORT";
+    }
+
+    public static String adminToken() {
+        return "Bearer dev:admin-user:-:ADMIN";
+    }
 }

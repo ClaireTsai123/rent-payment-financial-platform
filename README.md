@@ -70,6 +70,7 @@ The code is one Spring Boot deployable organized into explicit modules:
 - `reconciliation`: chunk-oriented Spring Batch settlement-file reconciliation
 - `security`: stateless Spring Security configuration and replaceable dev principal
 - `renter`: renter-scoped portal read/query APIs and DTOs
+- `operations`: secured internal read/query APIs and DTOs for support and finance users
 - `shared`: domain enums, money movement entities, state-transition service, API errors
 
 The repository also contains one frontend application:
@@ -349,6 +350,7 @@ Current migrations:
 | `V2__create_provider_webhook_events.sql` | webhook event audit and provider event deduplication                                                |
 | `V3__create_settlement_records.sql`      | expected and actual settlement tracking                                                             |
 | `V4__create_reconciliation_tables.sql`   | reconciliation runs and exception records                                                           |
+| `V5__add_operations_read_indexes.sql`    | read-side indexes for internal operations filtering and newest-first list views                      |
 
 Important constraints include:
 
@@ -477,6 +479,56 @@ Authorization: Bearer dev:test-user:renter-123:RENTER
 These APIs return Spring `Page` responses for list endpoints and DTOs rather than JPA
 entities. List endpoints default to `size=20` and newest-first sorting by `createdAt`
 descending. Requested page sizes are capped at 100.
+
+### Internal Operations Read APIs
+
+Internal operations APIs are read-only and require `SUPPORT`, `FINOPS`, or `ADMIN`.
+They return DTOs rather than JPA entities, default list responses to `size=20`, cap
+requested page sizes at 100, and default to newest-first sorting where the underlying
+record has a lifecycle timestamp.
+
+```http
+GET /api/v1/ops/money-movements
+GET /api/v1/ops/money-movements/{id}
+GET /api/v1/ops/provider-transactions
+GET /api/v1/ops/provider-transactions/{id}
+GET /api/v1/ops/provider-webhook-events
+GET /api/v1/ops/provider-webhook-events/{id}
+GET /api/v1/ops/outbox-events
+GET /api/v1/ops/outbox-events/{id}
+GET /api/v1/ops/settlement-records
+GET /api/v1/ops/settlement-records/{id}
+GET /api/v1/ops/reconciliation-runs
+GET /api/v1/ops/reconciliation-runs/{id}
+GET /api/v1/ops/reconciliation-exceptions
+GET /api/v1/ops/reconciliation-exceptions/{id}
+Authorization: Bearer dev:support-user:-:SUPPORT
+```
+
+Practical filters include:
+
+- money movements: `id`, `paymentPlanId`, `renterId`, `state`, `type`, `operationKey`,
+  `createdFrom`, `createdTo`
+- provider transactions: `id`, `moneyMovementId`, `paymentAttemptId`, `provider`,
+  `status`, `providerTransactionId`, `providerIdempotencyKey`, `createdFrom`,
+  `createdTo`
+- provider webhook events: `id`, `provider`, `providerEventId`,
+  `providerTransactionId`, `normalizedStatus`, `status`, `occurredFrom`, `occurredTo`,
+  `receivedFrom`, `receivedTo`
+- outbox events: `id`, `aggregateId`, `aggregateType`, `eventType`, `status`,
+  `createdFrom`, `createdTo`
+- settlement records: `id`, `moneyMovementId`, `providerTransactionId`, `provider`,
+  `status`, `providerTransactionReference`, `providerBatchReference`,
+  `expectedSettlementDateFrom`, `expectedSettlementDateTo`, `actualSettlementDateFrom`,
+  `actualSettlementDateTo`, `createdFrom`, `createdTo`
+- reconciliation runs: `id`, `status`, `sourceFile`, `startedFrom`, `startedTo`,
+  `completedFrom`, `completedTo`
+- reconciliation exceptions: `id`, `reconciliationRunId`, `exceptionType`, `provider`,
+  `providerTransactionReference`, `createdFrom`, `createdTo`
+
+Detail endpoints return clear `OPERATIONS_RESOURCE_NOT_FOUND` errors for unknown IDs.
+Invalid enum/date parameters return `INVALID_REQUEST_PARAMETER`; invalid date ranges
+return `INVALID_FILTER`.
 
 ## Local Development
 
@@ -641,6 +693,7 @@ Current test classes:
 - `OutboxPublisherTests`
 - `ReconciliationJobTests`
 - `RenterPortalControllerTests`
+- `OperationsReadControllerTests`
 
 ## Implemented Versus Not Yet Implemented
 
@@ -649,6 +702,7 @@ Implemented:
 - Phase 1 Tasks 1-12
 - First full-stack enablement slice: Spring Security dev principal, renter-scoped read
   APIs, DTOs, pagination, and renter ownership checks
+- Internal operations read APIs for support and finance workflows
 - Local/dev-only demo seed data for `renter-123`
 - Modular Spring Boot backend
 - PostgreSQL/Flyway persistence
@@ -670,7 +724,6 @@ Not yet implemented:
 - DLQ operational workflow
 - Real S3 file source
 - Production OAuth2/JWT integration
-- Internal operations query APIs
 - Production-grade renter-facing portal
 - Internal financial-operations portal
 - Docker Compose/local full-stack orchestration
@@ -764,6 +817,16 @@ Current frontend implementation:
 - Vite dev proxy for local Spring Boot integration
 - Local/dev terminal-state demo script for applying mock-provider webhooks to portal-created
   collections without adding privileged controls to the renter UI
+
+Current internal operations backend implementation:
+
+- Secured read-only `/api/v1/ops/**` endpoints for money movements, provider
+  transactions, webhook events, outbox events, settlement records, reconciliation runs,
+  and reconciliation exceptions
+- DTO-only responses with pagination, exact-match filters, bounded date/range filters,
+  detail views, and state-history detail for money movements
+- Focused backend integration coverage for operations authorization, filtering,
+  pagination, detail lookup, not-found responses, and invalid filters
 
 Recommended full-stack phases:
 

@@ -5,8 +5,9 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface MoneyMovementRepository extends JpaRepository<MoneyMovement, UUID> {
+public interface MoneyMovementRepository extends JpaRepository<MoneyMovement, UUID>, JpaSpecificationExecutor<MoneyMovement> {
 
     Optional<MoneyMovement> findByOperationKey(String operationKey);
 
