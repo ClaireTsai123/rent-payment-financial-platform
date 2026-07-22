@@ -3,6 +3,7 @@ package com.claire.rentpaymentfinancialplatform.shared.api;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyConflictException;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyExpiredException;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyInProgressException;
+import com.claire.rentpaymentfinancialplatform.renter.MoneyMovementNotFoundException;
 import com.claire.rentpaymentfinancialplatform.webhook.WebhookSignatureException;
 import java.time.Instant;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +21,12 @@ public class RestExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     ApiErrorResponse handlePaymentPlanNotFound(PaymentPlanNotFoundException exception) {
         return new ApiErrorResponse("PAYMENT_PLAN_NOT_FOUND", exception.getMessage(), Instant.now());
+    }
+
+    @ExceptionHandler(MoneyMovementNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    ApiErrorResponse handleMoneyMovementNotFound(MoneyMovementNotFoundException exception) {
+        return new ApiErrorResponse("MONEY_MOVEMENT_NOT_FOUND", exception.getMessage(), Instant.now());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

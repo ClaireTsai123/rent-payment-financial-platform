@@ -1,6 +1,7 @@
 package com.claire.rentpaymentfinancialplatform.collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.claire.rentpaymentfinancialplatform.SecurityTestSupport.renterToken;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -82,6 +83,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
         String operationKey = "collection-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -132,6 +134,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
         String operationKey = "collection-mock-fail-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -170,6 +173,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
         String operationKey = "collection-mock-timeout-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -206,6 +210,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
     @Test
     void returnsNotFoundWhenPaymentPlanDoesNotExist() throws Exception {
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken("renter-missing"))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -222,6 +227,28 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void returnsNotFoundWhenPaymentPlanBelongsToDifferentRenter() throws Exception {
+        PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
+
+        mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken("different-renter"))
+                        .header("Idempotency-Key", "idem-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentPlanId": "%s",
+                                  "operationKey": "collection-%s",
+                                  "currency": "USD"
+                                }
+                                """.formatted(paymentPlan.getId(), UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PAYMENT_PLAN_NOT_FOUND"));
+
+        assertThat(moneyMovementRepository.findAll()).isEmpty();
+        assertThat(idempotencyRecordRepository.findAll()).isEmpty();
+    }
+
+    @Test
     void returnsConflictForDuplicateOperationKey() throws Exception {
         PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
         String operationKey = "collection-" + UUID.randomUUID();
@@ -234,11 +261,13 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 """.formatted(paymentPlan.getId(), operationKey);
 
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isCreated());
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -261,6 +290,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 """.formatted(paymentPlan.getId(), UUID.randomUUID());
 
         String firstResponse = mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -269,6 +299,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 .getResponse()
                 .getContentAsString();
         String secondResponse = mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -296,6 +327,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
         String idempotencyKey = "idem-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -308,6 +340,7 @@ class RenterCollectionControllerTests extends PostgresIntegrationTest {
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/renter-collections")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

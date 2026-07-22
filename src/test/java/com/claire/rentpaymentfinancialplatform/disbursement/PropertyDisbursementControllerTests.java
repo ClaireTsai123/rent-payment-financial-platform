@@ -1,6 +1,8 @@
 package com.claire.rentpaymentfinancialplatform.disbursement;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.claire.rentpaymentfinancialplatform.SecurityTestSupport.finopsToken;
+import static com.claire.rentpaymentfinancialplatform.SecurityTestSupport.renterToken;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -82,6 +84,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
         String operationKey = "disbursement-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -132,6 +135,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
         String operationKey = "disbursement-mock-fail-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -170,6 +174,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
         String operationKey = "disbursement-mock-timeout-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -206,6 +211,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
     @Test
     void returnsNotFoundWhenPaymentPlanDoesNotExist() throws Exception {
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -222,6 +228,28 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void rejectsRenterRoleForPropertyDisbursement() throws Exception {
+        PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
+
+        mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", renterToken(paymentPlan.getRenterId()))
+                        .header("Idempotency-Key", "idem-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentPlanId": "%s",
+                                  "operationKey": "disbursement-%s",
+                                  "currency": "USD"
+                                }
+                                """.formatted(paymentPlan.getId(), UUID.randomUUID())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(moneyMovementRepository.findAll()).isEmpty();
+        assertThat(idempotencyRecordRepository.findAll()).isEmpty();
+    }
+
+    @Test
     void returnsConflictForDuplicateOperationKey() throws Exception {
         PaymentPlan paymentPlan = paymentPlanRepository.save(newPaymentPlan());
         String operationKey = "disbursement-" + UUID.randomUUID();
@@ -234,11 +262,13 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
                 """.formatted(paymentPlan.getId(), operationKey);
 
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isCreated());
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -261,6 +291,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
                 """.formatted(paymentPlan.getId(), UUID.randomUUID());
 
         String firstResponse = mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -269,6 +300,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
                 .getResponse()
                 .getContentAsString();
         String secondResponse = mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
@@ -296,6 +328,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
         String idempotencyKey = "idem-" + UUID.randomUUID();
 
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -308,6 +341,7 @@ class PropertyDisbursementControllerTests extends PostgresIntegrationTest {
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/property-disbursements")
+                        .header("Authorization", finopsToken())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

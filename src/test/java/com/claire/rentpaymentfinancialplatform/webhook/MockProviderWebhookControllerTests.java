@@ -1,6 +1,8 @@
 package com.claire.rentpaymentfinancialplatform.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.claire.rentpaymentfinancialplatform.SecurityTestSupport.finopsToken;
+import static com.claire.rentpaymentfinancialplatform.SecurityTestSupport.renterToken;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -319,6 +321,7 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
         String operationKey = apiFlow.operationPrefix() + "-" + scenario + "-" + UUID.randomUUID();
 
         mockMvc.perform(post(apiFlow.endpoint())
+                        .header("Authorization", authorizationFor(apiFlow, paymentPlan))
                         .header("Idempotency-Key", "idem-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -332,6 +335,12 @@ class MockProviderWebhookControllerTests extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.type").value(apiFlow.expectedType().name()));
 
         return providerTransactionRepository.findAll().get(0);
+    }
+
+    private static String authorizationFor(ApiFlow apiFlow, PaymentPlan paymentPlan) {
+        return apiFlow.expectedType() == MoneyMovementType.PROPERTY_DISBURSEMENT
+                ? finopsToken()
+                : renterToken(paymentPlan.getRenterId());
     }
 
     private org.springframework.test.web.servlet.ResultActions sendWebhook(

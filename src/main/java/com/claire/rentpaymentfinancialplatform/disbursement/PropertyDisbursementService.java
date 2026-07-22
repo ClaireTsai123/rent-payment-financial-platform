@@ -38,6 +38,9 @@ public class PropertyDisbursementService {
 
     @Transactional
     public PropertyDisbursementResponse createDisbursement(String idempotencyKey, CreatePropertyDisbursementRequest request) {
+        PaymentPlan paymentPlan = paymentPlanRepository.findById(request.paymentPlanId())
+                .orElseThrow(() -> new PaymentPlanNotFoundException(request.paymentPlanId()));
+
         IdempotencyRecord idempotencyRecord = idempotencyService.startOrReplay(
                 idempotencyKey,
                 IdempotencyOperation.PROPERTY_DISBURSEMENT,
@@ -46,9 +49,6 @@ public class PropertyDisbursementService {
         if (idempotencyRecord.getStatus() == IdempotencyStatus.COMPLETED) {
             return idempotencyService.readStoredResponse(idempotencyRecord, PropertyDisbursementResponse.class);
         }
-
-        PaymentPlan paymentPlan = paymentPlanRepository.findById(request.paymentPlanId())
-                .orElseThrow(() -> new PaymentPlanNotFoundException(request.paymentPlanId()));
 
         MoneyMovement moneyMovement = moneyMovementRepository.saveAndFlush(new MoneyMovement(
                 UUID.randomUUID(),

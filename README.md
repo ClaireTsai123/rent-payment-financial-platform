@@ -5,7 +5,8 @@ This repository implements the modular Spring Boot Rent Payment Application desc
 The blueprint remains the canonical source of truth for scope, architecture decisions,
 technology choices, and interview narrative.
 
-Current implementation checkpoint: **Phase 1 Tasks 1-12**.
+Current implementation checkpoint: **Phase 1 Tasks 1-12** plus the first
+full-stack enablement slice for local/dev authentication and renter-scoped read APIs.
 
 For a fuller Phase 1 documentation checkpoint and full-stack roadmap, see
 [`docs/Phase_1_Documentation_Checkpoint.md`](docs/Phase_1_Documentation_Checkpoint.md).
@@ -24,6 +25,9 @@ Implemented Phase 1 flows:
 - Submit those movements to a deterministic mock provider adapter.
 - Track attempts, provider references, state history, webhooks, outbox events,
   settlement expectations, and reconciliation outcomes.
+- Authenticate renter-facing and internal command APIs through a replaceable local/dev
+  bearer-token principal in local/dev/test profiles.
+- Expose renter-scoped read APIs for payment plans and money movements.
 
 Billing, Risk, and Ledger remain external/shared boundaries. The application does not
 create unnecessary microservices and does not introduce Kafka, Eureka, OpenFeign,
@@ -58,6 +62,8 @@ The code is one Spring Boot deployable organized into explicit modules:
 - `outbox`: transactional event persistence and scheduled local publishing
 - `settlement`: expected settlement record creation
 - `reconciliation`: chunk-oriented Spring Batch settlement-file reconciliation
+- `security`: stateless Spring Security configuration and replaceable dev principal
+- `renter`: renter-scoped portal read/query APIs and DTOs
 - `shared`: domain enums, money movement entities, state-transition service, API errors
 
 ## End-to-End Flows
@@ -91,7 +97,8 @@ to the upstream Billing domain and is intentionally out of scope for this servic
 
 ### Property Disbursement
 
-Property disbursement follows the same command pattern but creates an independent
+Property disbursement follows the same command pattern but is now treated as an internal
+financial-operations command rather than a renter-facing action. It creates an independent
 `PROPERTY_DISBURSEMENT` money movement. The disbursement amount comes from the
 payment-side `PaymentPlan` rent amount, while renter collection uses the initial
 collection amount.
@@ -150,6 +157,40 @@ Implemented behavior:
 - In-flight duplicate request returns `409`
 - Expired key reuse returns `409`
 - Expiration timestamp is persisted on `IdempotencyRecord`
+
+## Authentication And Authorization
+
+The current full-stack enablement slice adds Spring Security in a stateless shape that
+can later evolve into an OAuth2 resource server. It intentionally does not implement
+registration, password management, or a full identity service.
+
+Local/dev/test requests use a replaceable bearer-token principal:
+
+```text
+Authorization: Bearer dev:<subject>:<renterId>:<comma-separated-roles>
+```
+
+Examples:
+
+```text
+Authorization: Bearer dev:test-user:renter-123:RENTER
+Authorization: Bearer dev:finops-user:-:FINOPS
+```
+
+Implemented authorization behavior:
+
+- `/api/v1/me/**` requires role `RENTER`.
+- Renter collection requires role `RENTER`.
+- Property disbursement requires role `FINOPS` or `ADMIN`.
+- Renter command and read APIs derive renter scope from the authenticated principal.
+- A renter cannot read or create a movement against another renter's payment plan.
+- Property disbursement does not derive renter scope from the authenticated principal;
+  it loads the existing payment plan as an internal financial-operations command.
+- `/api/v1/provider-webhooks/mock-provider` remains protected by provider shared-secret
+  verification, not renter JWT authentication.
+- `/actuator/health` is public for local health checks.
+- The dev bearer-token filter is profile-gated to `local`, `dev`, and `test`; it is not
+  registered for production profiles.
 
 ## Webhook Ingestion
 
@@ -306,10 +347,17 @@ Important constraints include:
 
 ## Current API Endpoints
 
+Renter-facing collection and `/api/v1/me/**` read endpoints require:
+
+```text
+Authorization: Bearer dev:<subject>:<renterId>:RENTER
+```
+
 ### Renter Collection
 
 ```http
 POST /api/v1/renter-collections
+Authorization: Bearer dev:test-user:renter-123:RENTER
 Idempotency-Key: <key>
 Content-Type: application/json
 
@@ -339,6 +387,7 @@ Response:
 
 ```http
 POST /api/v1/property-disbursements
+Authorization: Bearer dev:finops-user:-:FINOPS
 Idempotency-Key: <key>
 Content-Type: application/json
 
@@ -378,6 +427,37 @@ Webhook response results:
 - `DUPLICATE`: the provider event was already received and no second update was applied.
 - `UNMATCHED`: the provider transaction was unknown; the raw event was retained for investigation.
 - `IGNORED`: the event matched a provider transaction but was not allowed to regress or mutate a terminal state.
+
+### Renter Portal Read APIs
+
+```http
+GET /api/v1/me/payment-plans?page=0&size=20&sort=createdAt,desc
+Authorization: Bearer dev:test-user:renter-123:RENTER
+```
+
+```http
+GET /api/v1/me/payment-plans/{paymentPlanId}
+Authorization: Bearer dev:test-user:renter-123:RENTER
+```
+
+```http
+GET /api/v1/me/money-movements?page=0&size=20
+Authorization: Bearer dev:test-user:renter-123:RENTER
+```
+
+```http
+GET /api/v1/me/money-movements?paymentPlanId={paymentPlanId}&page=0&size=20
+Authorization: Bearer dev:test-user:renter-123:RENTER
+```
+
+```http
+GET /api/v1/me/money-movements/{moneyMovementId}
+Authorization: Bearer dev:test-user:renter-123:RENTER
+```
+
+These APIs return Spring `Page` responses for list endpoints and DTOs rather than JPA
+entities. List endpoints default to `size=20` and newest-first sorting by `createdAt`
+descending. Requested page sizes are capped at 100.
 
 ## Local Development
 
@@ -424,7 +504,9 @@ Current tests use JUnit 5 and PostgreSQL Testcontainers. They exercise Flyway mi
 Hibernate validation, repository constraints, command APIs, idempotency behavior, provider
 submission side effects, webhook deduplication, state transitions, transactional outbox,
 outbox publisher retries/concurrency, settlement expectation creation, and chunk-oriented
-reconciliation restart behavior.
+reconciliation restart behavior. The full-stack enablement tests also cover stateless
+dev-principal authentication, role rejection, renter ownership scoping, and paginated
+renter read APIs.
 
 Current test classes:
 
@@ -437,12 +519,15 @@ Current test classes:
 - `MoneyMovementStateTransitionServiceTests`
 - `OutboxPublisherTests`
 - `ReconciliationJobTests`
+- `RenterPortalControllerTests`
 
 ## Implemented Versus Not Yet Implemented
 
 Implemented:
 
 - Phase 1 Tasks 1-12
+- First full-stack enablement slice: Spring Security dev principal, renter-scoped read
+  APIs, DTOs, pagination, and renter ownership checks
 - Modular Spring Boot backend
 - PostgreSQL/Flyway persistence
 - Command APIs for collection and disbursement
@@ -462,7 +547,8 @@ Not yet implemented:
 - Processed-event SQS consumer deduplication table
 - DLQ operational workflow
 - Real S3 file source
-- Auth, RBAC, renter scoping, operations query APIs
+- Production OAuth2/JWT integration
+- Internal operations query APIs
 - Renter-facing portal
 - Internal financial-operations portal
 - Docker Compose/local full-stack orchestration

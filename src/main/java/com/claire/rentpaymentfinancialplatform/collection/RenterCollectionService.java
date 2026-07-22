@@ -6,6 +6,7 @@ import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyOperation;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyRecord;
 import com.claire.rentpaymentfinancialplatform.idempotency.IdempotencyService;
 import com.claire.rentpaymentfinancialplatform.provider.ProviderSubmissionService;
+import com.claire.rentpaymentfinancialplatform.security.AuthenticatedUserProvider;
 import com.claire.rentpaymentfinancialplatform.shared.domain.IdempotencyStatus;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementState;
 import com.claire.rentpaymentfinancialplatform.shared.domain.MoneyMovementType;
@@ -23,21 +24,27 @@ public class RenterCollectionService {
     private final MoneyMovementRepository moneyMovementRepository;
     private final IdempotencyService idempotencyService;
     private final ProviderSubmissionService providerSubmissionService;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
     public RenterCollectionService(
             PaymentPlanRepository paymentPlanRepository,
             MoneyMovementRepository moneyMovementRepository,
             IdempotencyService idempotencyService,
-            ProviderSubmissionService providerSubmissionService
+            ProviderSubmissionService providerSubmissionService,
+            AuthenticatedUserProvider authenticatedUserProvider
     ) {
         this.paymentPlanRepository = paymentPlanRepository;
         this.moneyMovementRepository = moneyMovementRepository;
         this.idempotencyService = idempotencyService;
         this.providerSubmissionService = providerSubmissionService;
+        this.authenticatedUserProvider = authenticatedUserProvider;
     }
 
     @Transactional
     public RenterCollectionResponse createCollection(String idempotencyKey, CreateRenterCollectionRequest request) {
+        PaymentPlan paymentPlan = paymentPlanRepository.findByIdAndRenterId(request.paymentPlanId(), authenticatedUserProvider.currentRenterId())
+                .orElseThrow(() -> new PaymentPlanNotFoundException(request.paymentPlanId()));
+
         IdempotencyRecord idempotencyRecord = idempotencyService.startOrReplay(
                 idempotencyKey,
                 IdempotencyOperation.RENTER_COLLECTION,
@@ -46,9 +53,6 @@ public class RenterCollectionService {
         if (idempotencyRecord.getStatus() == IdempotencyStatus.COMPLETED) {
             return idempotencyService.readStoredResponse(idempotencyRecord, RenterCollectionResponse.class);
         }
-
-        PaymentPlan paymentPlan = paymentPlanRepository.findById(request.paymentPlanId())
-                .orElseThrow(() -> new PaymentPlanNotFoundException(request.paymentPlanId()));
 
         MoneyMovement moneyMovement = moneyMovementRepository.saveAndFlush(new MoneyMovement(
                 UUID.randomUUID(),

@@ -1,7 +1,8 @@
 # Phase 1 Documentation Checkpoint
 
-This document records the current repository state after Phase 1 Tasks 1-12. It is a
-checkpoint for implementation planning and should remain consistent with
+This document records the current repository state after Phase 1 Tasks 1-12 and the
+first full-stack enablement slice. It is a checkpoint for implementation planning and
+should remain consistent with
 [`Flex_Rent_Payment_Project_Blueprint.md`](Flex_Rent_Payment_Project_Blueprint.md).
 
 The blueprint remains canonical. This file describes what is actually implemented in
@@ -26,6 +27,16 @@ Phase 1 Tasks 1-12 are implemented:
     malformed-row handling, and integration coverage for duplicates, concurrency,
     webhook replay, rollback, publisher behavior, settlement, and reconciliation
 
+Full-stack enablement started:
+
+- Stateless Spring Security configuration
+- Replaceable local/dev/test bearer-token principal
+- Renter-scoped payment-plan and money-movement read APIs
+- DTO responses for renter portal use
+- Pagination through Spring `Pageable`
+- Renter ownership checks for read and command endpoints
+- FINOPS/ADMIN authorization for property disbursement commands
+
 ## Business Scope
 
 The implemented service supports the payment-side lifecycle for renter collections and
@@ -43,18 +54,20 @@ The service does not own:
 
 ## Current Backend Modules
 
-| Module | Implemented responsibility |
-| --- | --- |
-| `paymentplan` | Payment-side plan snapshot persistence |
-| `collection` | Renter collection command endpoint and service |
-| `disbursement` | Property disbursement command endpoint and service |
-| `provider` | Provider adapter contract, normalized request/response, mock provider |
-| `webhook` | Mock-provider webhook endpoint, signature check, dedupe, audit persistence |
-| `idempotency` | Request fingerprinting, replay, conflict handling, expiration |
+| Module                 | Implemented responsibility                                                  |
+|------------------------|-----------------------------------------------------------------------------|
+| `paymentplan`          | Payment-side plan snapshot persistence                                      |
+| `collection`           | Renter collection command endpoint and service                              |
+| `disbursement`         | Property disbursement command endpoint and service                          |
+| `provider`             | Provider adapter contract, normalized request/response, mock provider       |
+| `webhook`              | Mock-provider webhook endpoint, signature check, dedupe, audit persistence  |
+| `idempotency`          | Request fingerprinting, replay, conflict handling, expiration               |
 | `shared/moneymovement` | Money movement, attempts, provider transactions, state history, transitions |
-| `outbox` | Transactional event rows, scheduler, publisher, mock event sink |
-| `settlement` | Expected settlement record creation |
-| `reconciliation` | Chunk-oriented Spring Batch file reconciliation |
+| `outbox`               | Transactional event rows, scheduler, publisher, mock event sink             |
+| `settlement`           | Expected settlement record creation                                         |
+| `reconciliation`       | Chunk-oriented Spring Batch file reconciliation                             |
+| `security`             | Stateless security configuration and replaceable dev principal              |
+| `renter`               | Renter portal read/query APIs and DTOs                                      |
 
 ## Current Runtime Flow
 
@@ -195,7 +208,29 @@ Command APIs:
 - `POST /api/v1/property-disbursements`
 - `POST /api/v1/provider-webhooks/mock-provider`
 
-There are no read/query APIs yet for renter or operations portals.
+Renter read APIs:
+
+- `GET /api/v1/me/payment-plans`
+- `GET /api/v1/me/payment-plans/{paymentPlanId}`
+- `GET /api/v1/me/money-movements`
+- `GET /api/v1/me/money-movements/{moneyMovementId}`
+
+Renter list APIs default to `size=20` with newest-first sorting by `createdAt` descending.
+Requested page sizes are capped at 100.
+
+The `/api/v1/me/**` and collection endpoints require a local/dev/test bearer token with
+role `RENTER`. Property disbursement requires role `FINOPS` or `ADMIN` and does not derive
+renter ownership from the authenticated principal. The webhook endpoint remains protected
+by provider shared-secret verification. There are no internal operations query APIs yet.
+
+Local/dev token format:
+
+```text
+Authorization: Bearer dev:<subject>:<renterId>:<comma-separated-roles>
+```
+
+The dev bearer-token filter is profile-gated to `local`, `dev`, and `test`; it is not
+registered for production profiles.
 
 ## Testing Checkpoint
 
@@ -214,6 +249,12 @@ Testing is PostgreSQL-backed through Testcontainers. The suite covers:
 - scheduled outbox publisher success, retry, permanent failure, and concurrency
 - settlement expectation creation
 - reconciliation matching, malformed rows, reruns, and restartability
+- stateless dev-principal authentication
+- renter role enforcement
+- renter-scoped read API pagination and ownership protection
+- command endpoint payment-plan ownership protection
+- FINOPS/ADMIN authorization for property disbursement
+- production-profile absence of the dev bearer-token filter
 
 ## Local Development Checkpoint
 
@@ -231,8 +272,9 @@ There is currently no Docker Compose configuration in the repository.
 
 ## Full-Stack Architecture Direction
 
-The next enterprise-style evolution should add portals and query APIs without changing
-the payment execution, webhook, outbox, settlement, or reconciliation domain logic.
+The next enterprise-style evolution should build on the new renter-scoped read APIs
+without changing the payment execution, webhook, outbox, settlement, or reconciliation
+domain logic.
 
 ```mermaid
 flowchart TD
@@ -272,12 +314,11 @@ Recommended operations pages:
 - Reconciliation runs
 - Reconciliation exceptions
 
-Recommended backend gaps to fill first:
+Remaining backend gaps:
 
-- Authentication and role-based authorization
-- Renter ownership/scoping
-- DTOs and query models
-- Pageable query APIs
+- Production OAuth2/JWT resource-server integration
+- Operations query APIs
+- Support and finance-operations role surfaces
 - Filtering by state/status/type/provider/date
 - Constrained exact search by IDs and provider references
 - CORS configuration for a frontend dev server
@@ -323,15 +364,14 @@ Future production hardening should add:
 
 ## Recommended Next Vertical Slice
 
-Start with a read-only renter portal slice:
+Continue with the renter portal slice:
 
-1. Add Spring Security with local/dev JWT support.
-2. Add `GET /api/v1/me/payment-plans`.
-3. Add `GET /api/v1/me/payment-plans/{id}`.
-4. Add `GET /api/v1/me/money-movements`.
-5. Add a React/TypeScript renter dashboard and payment-plan detail page.
-6. Reuse the existing collection command endpoint after renter ownership checks are in
-   place.
+1. Scaffold a React/TypeScript frontend.
+2. Add auth token handling for local/dev.
+3. Add renter dashboard and payment-plan detail page.
+4. Read payment plans and money movements from `/api/v1/me/**`.
+5. Reuse the existing collection command endpoint with idempotency and renter ownership
+   checks.
 
 This creates a real full-stack path without disturbing the established financial domain
 logic.
