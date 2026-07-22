@@ -1,8 +1,8 @@
 # Phase 1 Documentation Checkpoint
 
 This document records the current repository state after Phase 1 Tasks 1-12 and the
-first full-stack enablement slice. It is a checkpoint for implementation planning and
-should remain consistent with
+full-stack enablement work through the renter portal vertical slice. It is a checkpoint
+for implementation planning and should remain consistent with
 [`Flex_Rent_Payment_Project_Blueprint.md`](Flex_Rent_Payment_Project_Blueprint.md).
 
 The blueprint remains canonical. This file describes what is actually implemented in
@@ -41,6 +41,8 @@ Full-stack enablement started:
   collection initiation against existing APIs
 - Local/dev-only demo fixture data for `renter-123`, including active and completed
   payment plans plus renter-visible money movements
+- Local/dev terminal-state demo script that applies mock-provider webhooks to
+  portal-created collections without adding privileged controls to the renter UI
 
 ## Business Scope
 
@@ -301,6 +303,10 @@ Current local assumptions:
 - Vite proxy from the frontend dev server to Spring Boot on port `8080`
 - Local/dev demo data seeds `renter-123` with stable payment-plan and money-movement
   fixture rows. The seeder is idempotent and is not registered for production profiles.
+- `scripts/demo/mock-provider-webhook.sh` can apply a local mock-provider webhook for a
+  portal-created collection by operation key or provider transaction id. It defaults to
+  `http://localhost:8080`, uses the local shared secret, and refuses non-local API URLs
+  unless explicitly overridden for an intentional sandbox.
 
 There is currently no Docker Compose configuration in the repository.
 
@@ -388,10 +394,12 @@ Current repository implementation:
 - `frontend/src/auth`: local/dev token context and protected route
 - `frontend/src/api`: typed API client for renter-scoped reads and collection command
 - `frontend/src/pages/renter`: dev token page, dashboard, payment-plan detail, and
-  money-movement detail
-- `frontend/src/components`: layout, status, money, and feedback components
+  money-movement detail with pagination for renter list views
+- `frontend/src/components`: layout, status, money, pagination, and feedback components
 - `frontend/src/test`: React Testing Library provider setup for focused portal tests
 - `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
+- `scripts/demo/mock-provider-webhook.sh`: local/dev helper for moving a processing
+  mock-provider transaction to a terminal status through the existing webhook contract
 
 ## Production Direction
 
@@ -411,15 +419,15 @@ Future production hardening should add:
 
 ## Recommended Next Vertical Slice
 
-Continue with the renter portal slice:
+Continue with production-readiness enablement:
 
-1. Add pagination controls for payment plans and money movement history.
-2. Add optional provider-webhook demo actions or fixture instructions for moving a
-   processing collection to a terminal state.
-3. Add production OAuth2/JWT integration behind the same frontend auth boundary.
-4. Add operations query APIs before building the internal financial-operations portal.
-5. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
+1. Add production OAuth2/JWT integration behind the same frontend auth boundary.
+2. Add operations query APIs before building the internal financial-operations portal.
+3. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
    backend, and frontend.
+4. Add read-side filtering once the operations query APIs are introduced.
+5. Add provider ambiguity/status-polling runbooks and internal tools before any
+   production provider integration.
 
 This creates a real full-stack path without disturbing the established financial domain
 logic.

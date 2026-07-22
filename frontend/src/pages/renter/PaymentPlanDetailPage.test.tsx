@@ -37,16 +37,26 @@ const completedPlan = {
   status: "COMPLETED"
 };
 
-function page<T>(content: T[]) {
+function page<T>(content: T[], overrides: Partial<ReturnType<typeof pageBase>> = {}) {
   return {
+    ...pageBase(),
     content,
     totalElements: content.length,
     totalPages: content.length ? 1 : 0,
+    empty: content.length === 0,
+    ...overrides
+  };
+}
+
+function pageBase() {
+  return {
     size: 20,
     number: 0,
     first: true,
     last: true,
-    empty: content.length === 0
+    totalElements: 0,
+    totalPages: 0,
+    empty: true
   };
 }
 
@@ -127,6 +137,38 @@ describe("PaymentPlanDetailPage", () => {
 
     expect(await screen.findByText(/Collection started/)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+  });
+
+  it("paginates plan-scoped money movements with the paymentPlanId filter", async () => {
+    const secondMovement = {
+      ...movement,
+      id: "018f6f8d-2222-7000-8000-000000000302",
+      amount: 777,
+      operationKey: "demo-renter-collection-september-2026"
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(await jsonResponse(plan))
+      .mockResolvedValueOnce(await jsonResponse(page([movement], { totalElements: 2, totalPages: 2, first: true, last: false })))
+      .mockResolvedValueOnce(await jsonResponse(page([secondMovement], {
+        number: 1,
+        totalElements: 2,
+        totalPages: 2,
+        first: false,
+        last: true
+      })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderDetail();
+
+    expect((await screen.findAllByText("$485.00")).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Plan money movements next page" }));
+
+    expect(await screen.findByText("$777.00")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `/api/v1/me/money-movements?page=1&size=20&sort=createdAt%2Cdesc&paymentPlanId=${plan.id}`,
+      expect.any(Object)
+    );
   });
 
   it("shows backend error feedback", async () => {

@@ -9,6 +9,7 @@ import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorNotice } from "../../components/feedback/ErrorNotice";
 import { SuccessNotice } from "../../components/feedback/SuccessNotice";
 import { MoneyAmount } from "../../components/money/MoneyAmount";
+import { PaginationControls } from "../../components/pagination/PaginationControls";
 import { StatusPill } from "../../components/status/StatusPill";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/formatters";
 import { isCollectionEligiblePaymentPlan } from "./paymentPlanEligibility";
@@ -18,17 +19,21 @@ export function RenterDashboardPage() {
   const token = auth.token ?? "";
   const queryClient = useQueryClient();
   const [collectionResultId, setCollectionResultId] = useState<string | null>(null);
+  const [paymentPlansPage, setPaymentPlansPage] = useState(0);
+  const [movementsPage, setMovementsPage] = useState(0);
 
   const paymentPlansQuery = useQuery({
-    queryKey: ["payment-plans"],
-    queryFn: () => listPaymentPlans(token),
-    enabled: Boolean(token)
+    queryKey: ["payment-plans", paymentPlansPage],
+    queryFn: () => listPaymentPlans(token, paymentPlansPage),
+    enabled: Boolean(token),
+    placeholderData: (previousData) => previousData
   });
 
   const movementsQuery = useQuery({
-    queryKey: ["money-movements"],
-    queryFn: () => listMoneyMovements(token),
-    enabled: Boolean(token)
+    queryKey: ["money-movements", movementsPage],
+    queryFn: () => listMoneyMovements(token, undefined, movementsPage),
+    enabled: Boolean(token),
+    placeholderData: (previousData) => previousData
   });
 
   const openPlans = useMemo(
@@ -135,24 +140,33 @@ export function RenterDashboardPage() {
           <EmptyState title="No payment plans found" detail="The backend has no renter-scoped plans for this dev token." />
         ) : null}
         {paymentPlansQuery.data?.content.length ? (
-          <div className="data-table" role="table" aria-label="Payment plans">
-            <div className="table-row table-head" role="row">
-              <span>Obligation</span>
-              <span>Rent</span>
-              <span>Repayment due</span>
-              <span>Status</span>
-              <span />
+          <>
+            <div className="data-table" role="table" aria-label="Payment plans">
+              <div className="table-row table-head" role="row">
+                <span>Obligation</span>
+                <span>Rent</span>
+                <span>Repayment due</span>
+                <span>Status</span>
+                <span />
+              </div>
+              {paymentPlansQuery.data.content.map((plan) => (
+                <Link className="table-row table-link" role="row" to={`/payment-plans/${plan.id}`} key={plan.id}>
+                  <span>{plan.billingObligationId}</span>
+                  <span><MoneyAmount amount={plan.rentAmount} /></span>
+                  <span>{formatDate(plan.repaymentDueDate)}</span>
+                  <span><StatusPill value={plan.status} /></span>
+                  <span className="row-action"><ArrowRight aria-hidden="true" size={16} /></span>
+                </Link>
+              ))}
             </div>
-            {paymentPlansQuery.data.content.map((plan) => (
-              <Link className="table-row table-link" role="row" to={`/payment-plans/${plan.id}`} key={plan.id}>
-                <span>{plan.billingObligationId}</span>
-                <span><MoneyAmount amount={plan.rentAmount} /></span>
-                <span>{formatDate(plan.repaymentDueDate)}</span>
-                <span><StatusPill value={plan.status} /></span>
-                <span className="row-action"><ArrowRight aria-hidden="true" size={16} /></span>
-              </Link>
-            ))}
-          </div>
+            <PaginationControls
+              page={paymentPlansQuery.data}
+              isFetching={paymentPlansQuery.isFetching && !paymentPlansQuery.isLoading}
+              label="Payment plans"
+              onPrevious={() => setPaymentPlansPage((page) => Math.max(0, page - 1))}
+              onNext={() => setPaymentPlansPage((page) => page + 1)}
+            />
+          </>
         ) : null}
       </section>
 
@@ -164,24 +178,33 @@ export function RenterDashboardPage() {
         {movementsQuery.isLoading ? <div className="table-skeleton" /> : null}
         {movementsQuery.data?.empty ? <EmptyState title="No money movements yet" /> : null}
         {movementsQuery.data?.content.length ? (
-          <div className="data-table" role="table" aria-label="Money movements">
-            <div className="table-row table-head" role="row">
-              <span>Type</span>
-              <span>Amount</span>
-              <span>Created</span>
-              <span>State</span>
-              <span />
+          <>
+            <div className="data-table" role="table" aria-label="Money movements">
+              <div className="table-row table-head" role="row">
+                <span>Type</span>
+                <span>Amount</span>
+                <span>Created</span>
+                <span>State</span>
+                <span />
+              </div>
+              {movementsQuery.data.content.map((movement) => (
+                <Link className="table-row table-link" role="row" to={`/money-movements/${movement.id}`} key={movement.id}>
+                  <span>{humanizeEnum(movement.type)}</span>
+                  <span><MoneyAmount amount={movement.amount} currency={movement.currency} /></span>
+                  <span>{formatDateTime(movement.createdAt)}</span>
+                  <span><StatusPill value={movement.state} /></span>
+                  <span className="row-action"><ArrowRight aria-hidden="true" size={16} /></span>
+                </Link>
+              ))}
             </div>
-            {movementsQuery.data.content.map((movement) => (
-              <Link className="table-row table-link" role="row" to={`/money-movements/${movement.id}`} key={movement.id}>
-                <span>{humanizeEnum(movement.type)}</span>
-                <span><MoneyAmount amount={movement.amount} currency={movement.currency} /></span>
-                <span>{formatDateTime(movement.createdAt)}</span>
-                <span><StatusPill value={movement.state} /></span>
-                <span className="row-action"><ArrowRight aria-hidden="true" size={16} /></span>
-              </Link>
-            ))}
-          </div>
+            <PaginationControls
+              page={movementsQuery.data}
+              isFetching={movementsQuery.isFetching && !movementsQuery.isLoading}
+              label="Money movements"
+              onPrevious={() => setMovementsPage((page) => Math.max(0, page - 1))}
+              onNext={() => setMovementsPage((page) => page + 1)}
+            />
+          </>
         ) : null}
       </section>
     </div>

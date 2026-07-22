@@ -5,9 +5,10 @@ This repository implements the modular Spring Boot Rent Payment Application desc
 The blueprint remains the canonical source of truth for scope, architecture decisions,
 technology choices, and interview narrative.
 
-Current implementation checkpoint: **Phase 1 Tasks 1-12** plus the first two
-full-stack enablement slices: local/dev authentication, renter-scoped read APIs, and a
-React renter portal foundation under `frontend/`.
+Current implementation checkpoint: **Phase 1 Tasks 1-12** plus full-stack enablement
+through the renter portal vertical slice: local/dev authentication, renter-scoped read
+APIs, seeded local demo data, React renter workflows, pagination, and local
+terminal-state demo support under `frontend/` and `scripts/demo/`.
 
 For a fuller Phase 1 documentation checkpoint and full-stack roadmap, see
 [`docs/Phase_1_Documentation_Checkpoint.md`](docs/Phase_1_Documentation_Checkpoint.md).
@@ -556,6 +557,66 @@ With the `local` or `dev` profile active, startup seeds demo data for `renter-12
 Use that token to see populated plans, existing money movements, payment-plan detail, and
 collection submission feedback in the portal.
 
+### Local Collection Terminal-State Demo
+
+The current repository intentionally keeps provider terminal-state changes behind the
+mock-provider webhook contract. The renter portal can initiate a collection and refresh
+the read model, but it does not expose provider transaction identifiers or privileged
+webhook controls.
+
+For local/dev validation only, use the helper script to move a newly submitted collection
+from `PROCESSING` to a terminal provider status through the existing webhook endpoint:
+
+```bash
+./gradlew bootRun
+```
+
+In another terminal:
+
+```bash
+cd frontend
+nvm use
+npm run dev
+```
+
+Sign in to the portal with:
+
+```text
+dev:test-user:renter-123:RENTER
+```
+
+Submit a collection from an eligible active payment plan, then read the latest local demo
+collection operation key:
+
+```bash
+OPERATION_KEY="$(
+  PGPASSWORD=rent_payment psql -h localhost -U rent_payment -d rent_payment -Atc "
+    select mm.operation_key
+    from money_movements mm
+    join payment_plans pp on pp.id = mm.payment_plan_id
+    where pp.renter_id = 'renter-123'
+      and mm.type = 'RENTER_COLLECTION'
+    order by mm.created_at desc
+    limit 1;
+  "
+)"
+```
+
+Apply a terminal mock-provider webhook:
+
+```bash
+scripts/demo/mock-provider-webhook.sh --operation-key "$OPERATION_KEY" --status SUCCEEDED
+```
+
+Supported demo statuses are `SUCCEEDED`, `FAILED`, `RETURNED`, and `REVERSED`. Refresh the
+portal after the webhook to see the updated money-movement status. The script defaults to
+`http://localhost:8080` and refuses non-local API URLs unless explicitly overridden for an
+intentional sandbox.
+
+Production architecture should resolve provider terminal states through verified provider
+webhooks, status polling/reconciliation, operations runbooks, and auditable internal tools,
+not through renter-facing controls or local database lookups.
+
 There is not currently a Docker Compose file in the repository.
 
 ## Testing Strategy
@@ -695,9 +756,14 @@ Current frontend implementation:
 - Renter collection initiation using `POST /api/v1/renter-collections` with an
   idempotency key
 - Collection success and backend error feedback with refresh after submission
+- Pagination controls for payment plans, dashboard money movements, and plan-scoped
+  movement history using Spring `Page` metadata
 - Focused Vitest/React Testing Library coverage for renter dashboard, payment-plan
-  detail, money-movement detail, auth headers, success, empty, and error states
+  detail, money-movement detail, auth headers, pagination, success, empty, and error
+  states
 - Vite dev proxy for local Spring Boot integration
+- Local/dev terminal-state demo script for applying mock-provider webhooks to portal-created
+  collections without adding privileged controls to the renter UI
 
 Recommended full-stack phases:
 

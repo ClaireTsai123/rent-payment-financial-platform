@@ -41,16 +41,26 @@ const completedPlan = {
   repaymentDueDate: "2026-07-15"
 };
 
-function page<T>(content: T[]) {
+function page<T>(content: T[], overrides: Partial<ReturnType<typeof pageBase>> = {}) {
   return {
+    ...pageBase(),
     content,
     totalElements: content.length,
     totalPages: content.length ? 1 : 0,
+    empty: content.length === 0,
+    ...overrides
+  };
+}
+
+function pageBase() {
+  return {
     size: 20,
     number: 0,
     first: true,
     last: true,
-    empty: content.length === 0
+    totalElements: 0,
+    totalPages: 0,
+    empty: true
   };
 }
 
@@ -189,6 +199,72 @@ describe("RenterDashboardPage", () => {
           "Idempotency-Key": expect.stringMatching(/^portal-collection-/)
         })
       })
+    );
+  });
+
+  it("paginates payment plans with Spring page params and disables first-page previous", async () => {
+    const secondPlan = {
+      ...plan,
+      id: "018f6f8d-1111-7000-8000-000000000103",
+      billingObligationId: "billing-demo-september-2026"
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(await jsonResponse(page([plan], { totalElements: 2, totalPages: 2, first: true, last: false })))
+      .mockResolvedValueOnce(await jsonResponse(page([])))
+      .mockResolvedValueOnce(await jsonResponse(page([secondPlan], {
+        number: 1,
+        totalElements: 2,
+        totalPages: 2,
+        first: false,
+        last: true
+      })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<RenterDashboardPage />);
+
+    expect(await screen.findByText("billing-demo-august-2026")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Payment plans previous page" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Payment plans next page" }));
+
+    expect(await screen.findByText("billing-demo-september-2026")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/me/payment-plans?page=1&size=20&sort=createdAt,desc",
+      expect.any(Object)
+    );
+    expect(screen.getByRole("button", { name: "Payment plans next page" })).toBeDisabled();
+  });
+
+  it("paginates dashboard money movements independently", async () => {
+    const secondMovement = {
+      ...movement,
+      id: "018f6f8d-2222-7000-8000-000000000302",
+      amount: 777,
+      operationKey: "demo-renter-collection-september-2026"
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(await jsonResponse(page([plan])))
+      .mockResolvedValueOnce(await jsonResponse(page([movement], { totalElements: 2, totalPages: 2, first: true, last: false })))
+      .mockResolvedValueOnce(await jsonResponse(page([secondMovement], {
+        number: 1,
+        totalElements: 2,
+        totalPages: 2,
+        first: false,
+        last: true
+      })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<RenterDashboardPage />);
+
+    expect((await screen.findAllByText("$485.00")).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Money movements next page" }));
+
+    expect(await screen.findByText("$777.00")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/me/money-movements?page=1&size=20&sort=createdAt%2Cdesc",
+      expect.any(Object)
     );
   });
 

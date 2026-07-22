@@ -9,6 +9,7 @@ import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorNotice } from "../../components/feedback/ErrorNotice";
 import { SuccessNotice } from "../../components/feedback/SuccessNotice";
 import { MoneyAmount } from "../../components/money/MoneyAmount";
+import { PaginationControls } from "../../components/pagination/PaginationControls";
 import { StatusPill } from "../../components/status/StatusPill";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/formatters";
 import { isCollectionEligiblePaymentPlan } from "./paymentPlanEligibility";
@@ -18,6 +19,7 @@ export function PaymentPlanDetailPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [collectionResultId, setCollectionResultId] = useState<string | null>(null);
+  const [movementsPage, setMovementsPage] = useState(0);
 
   const planQuery = useQuery({
     queryKey: ["payment-plan", paymentPlanId],
@@ -26,9 +28,10 @@ export function PaymentPlanDetailPage() {
   });
 
   const movementsQuery = useQuery({
-    queryKey: ["money-movements", paymentPlanId],
-    queryFn: () => listMoneyMovements(token ?? "", paymentPlanId),
-    enabled: Boolean(token && paymentPlanId)
+    queryKey: ["money-movements", paymentPlanId, movementsPage],
+    queryFn: () => listMoneyMovements(token ?? "", paymentPlanId, movementsPage),
+    enabled: Boolean(token && paymentPlanId),
+    placeholderData: (previousData) => previousData
   });
 
   const plan = planQuery.data;
@@ -49,7 +52,7 @@ export function PaymentPlanDetailPage() {
       setCollectionResultId(response.moneyMovementId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["payment-plan", paymentPlanId], exact: true }),
-        queryClient.invalidateQueries({ queryKey: ["money-movements", paymentPlanId], exact: true }),
+        queryClient.invalidateQueries({ queryKey: ["money-movements", paymentPlanId, movementsPage], exact: true }),
         queryClient.invalidateQueries({ queryKey: ["money-movements"], exact: true })
       ]);
     }
@@ -128,24 +131,33 @@ export function PaymentPlanDetailPage() {
 
         {movementsQuery.data?.empty ? <EmptyState title="No movements for this plan" /> : null}
         {movementsQuery.data?.content.length ? (
-          <div className="data-table" role="table" aria-label="Plan money movements">
-            <div className="table-row table-head" role="row">
-              <span>Type</span>
-              <span>Amount</span>
-              <span>Created</span>
-              <span>State</span>
-              <span />
+          <>
+            <div className="data-table" role="table" aria-label="Plan money movements">
+              <div className="table-row table-head" role="row">
+                <span>Type</span>
+                <span>Amount</span>
+                <span>Created</span>
+                <span>State</span>
+                <span />
+              </div>
+              {movementsQuery.data.content.map((movement) => (
+                <Link className="table-row table-link" role="row" to={`/money-movements/${movement.id}`} key={movement.id}>
+                  <span>{humanizeEnum(movement.type)}</span>
+                  <span><MoneyAmount amount={movement.amount} currency={movement.currency} /></span>
+                  <span>{formatDateTime(movement.createdAt)}</span>
+                  <span><StatusPill value={movement.state} /></span>
+                  <span className="row-action"><ArrowRight aria-hidden="true" size={16} /></span>
+                </Link>
+              ))}
             </div>
-            {movementsQuery.data.content.map((movement) => (
-              <Link className="table-row table-link" role="row" to={`/money-movements/${movement.id}`} key={movement.id}>
-                <span>{humanizeEnum(movement.type)}</span>
-                <span><MoneyAmount amount={movement.amount} currency={movement.currency} /></span>
-                <span>{formatDateTime(movement.createdAt)}</span>
-                <span><StatusPill value={movement.state} /></span>
-                <span className="row-action"><ArrowRight aria-hidden="true" size={16} /></span>
-              </Link>
-            ))}
-          </div>
+            <PaginationControls
+              page={movementsQuery.data}
+              isFetching={movementsQuery.isFetching && !movementsQuery.isLoading}
+              label="Plan money movements"
+              onPrevious={() => setMovementsPage((page) => Math.max(0, page - 1))}
+              onNext={() => setMovementsPage((page) => page + 1)}
+            />
+          </>
         ) : null}
       </section>
     </div>
