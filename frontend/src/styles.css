@@ -140,6 +140,12 @@ a {
   gap: 16px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .eyebrow {
   display: block;
   margin-bottom: 6px;
@@ -329,6 +335,19 @@ h2 {
   color: #9a241d;
 }
 
+.notice-success {
+  border: 1px solid #a8dec1;
+  background: #f0fbf5;
+  color: #0f6b3e;
+}
+
+.inline-link {
+  color: #153b52;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .empty-state,
 .table-skeleton {
   display: grid;
@@ -438,6 +457,11 @@ h2 {
   .page-header,
   .detail-header,
   .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions {
     align-items: flex-start;
     flex-direction: column;
   }

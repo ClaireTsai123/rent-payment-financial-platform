@@ -31,6 +31,8 @@ Implemented Phase 1 flows:
 - Expose renter-scoped read APIs for payment plans and money movements.
 - Provide a local/dev React renter portal foundation that reads renter-scoped plans and
   money movements and initiates renter collections through the existing command API.
+- Seed local/dev-only demo payment plans and money movements for `renter-123` so the
+  renter portal can be exercised end to end.
 
 Billing, Risk, and Ledger remain external/shared boundaries. The application does not
 create unnecessary microservices and does not introduce Kafka, Eureka, OpenFeign,
@@ -73,6 +75,14 @@ The repository also contains one frontend application:
 
 - `frontend`: React, TypeScript, Vite, React Router, TanStack Query renter portal
   foundation for local/dev full-stack validation
+
+Local/dev profiles include demo fixture data:
+
+- `renter-123` has realistic active and completed payment plans.
+- Seeded plan and money-movement rows use stable demo keys and are safe to rerun without
+  creating duplicates.
+- This fixture is for local portal validation only; production plan creation remains a
+  Billing-owned boundary outside this service.
 
 ## End-to-End Flows
 
@@ -542,6 +552,10 @@ Use a local/dev renter token such as:
 dev:test-user:renter-123:RENTER
 ```
 
+With the `local` or `dev` profile active, startup seeds demo data for `renter-123`.
+Use that token to see populated plans, existing money movements, payment-plan detail, and
+collection submission feedback in the portal.
+
 There is not currently a Docker Compose file in the repository.
 
 ## Testing Strategy
@@ -574,6 +588,7 @@ Implemented:
 - Phase 1 Tasks 1-12
 - First full-stack enablement slice: Spring Security dev principal, renter-scoped read
   APIs, DTOs, pagination, and renter ownership checks
+- Local/dev-only demo seed data for `renter-123`
 - Modular Spring Boot backend
 - PostgreSQL/Flyway persistence
 - Command APIs for collection and disbursement
@@ -679,6 +694,9 @@ Current frontend implementation:
 - Money-movement detail page
 - Renter collection initiation using `POST /api/v1/renter-collections` with an
   idempotency key
+- Collection success and backend error feedback with refresh after submission
+- Focused Vitest/React Testing Library coverage for renter dashboard, payment-plan
+  detail, money-movement detail, auth headers, success, empty, and error states
 - Vite dev proxy for local Spring Boot integration
 
 Recommended full-stack phases:

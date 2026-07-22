@@ -39,6 +39,8 @@ Full-stack enablement started:
 - React/TypeScript renter portal foundation under `frontend/`
 - Local/dev token entry, protected renter shell, dashboard, detail pages, and renter
   collection initiation against existing APIs
+- Local/dev-only demo fixture data for `renter-123`, including active and completed
+  payment plans plus renter-visible money movements
 
 ## Business Scope
 
@@ -71,6 +73,7 @@ The service does not own:
 | `reconciliation`       | Chunk-oriented Spring Batch file reconciliation                             |
 | `security`             | Stateless security configuration and replaceable dev principal              |
 | `renter`               | Renter portal read/query APIs and DTOs                                      |
+| `devsupport`           | Local/dev-only demo fixture seeding for full-stack portal validation        |
 
 ## Current Frontend Module
 
@@ -81,7 +84,8 @@ The service does not own:
 The frontend currently uses React, TypeScript, React Router, TanStack Query, and a Vite
 dev-server proxy to the Spring Boot API. It stores a local/dev bearer token in browser
 local storage, reads renter-scoped payment plans and money movements from `/api/v1/me/**`,
-and initiates renter collections through the existing idempotent command endpoint.
+initiates renter collections through the existing idempotent command endpoint, shows
+success/error feedback, and refreshes renter read models after submission.
 
 ## Current Runtime Flow
 
@@ -295,6 +299,8 @@ Current local assumptions:
 - Testcontainers for integration tests
 - Node.js/npm for the optional `frontend/` local renter portal
 - Vite proxy from the frontend dev server to Spring Boot on port `8080`
+- Local/dev demo data seeds `renter-123` with stable payment-plan and money-movement
+  fixture rows. The seeder is idempotent and is not registered for production profiles.
 
 There is currently no Docker Compose configuration in the repository.
 
@@ -384,6 +390,7 @@ Current repository implementation:
 - `frontend/src/pages/renter`: dev token page, dashboard, payment-plan detail, and
   money-movement detail
 - `frontend/src/components`: layout, status, money, and feedback components
+- `frontend/src/test`: React Testing Library provider setup for focused portal tests
 - `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
 
 ## Production Direction
@@ -406,11 +413,13 @@ Future production hardening should add:
 
 Continue with the renter portal slice:
 
-1. Add seeded local data or a development fixture flow for end-to-end demo setup.
-2. Add collection result confirmation and error-specific recovery copy.
-3. Add pagination controls for payment plans and money movement history.
-4. Add production OAuth2/JWT integration behind the same frontend auth boundary.
-5. Add operations query APIs before building the internal financial-operations portal.
+1. Add pagination controls for payment plans and money movement history.
+2. Add optional provider-webhook demo actions or fixture instructions for moving a
+   processing collection to a terminal state.
+3. Add production OAuth2/JWT integration behind the same frontend auth boundary.
+4. Add operations query APIs before building the internal financial-operations portal.
+5. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
+   backend, and frontend.
 
 This creates a real full-stack path without disturbing the established financial domain
 logic.

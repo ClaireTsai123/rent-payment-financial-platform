@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { getMoneyMovement } from "../../api/renterPortal";
+import { getErrorMessage } from "../../api/errorMessage";
 import { useAuth } from "../../auth/authContext";
 import { ErrorNotice } from "../../components/feedback/ErrorNotice";
 import { MoneyAmount } from "../../components/money/MoneyAmount";
@@ -27,7 +28,7 @@ export function MoneyMovementDetailPage() {
         Dashboard
       </Link>
 
-      {movementQuery.error ? <ErrorNotice message={String(movementQuery.error)} /> : null}
+      {movementQuery.error ? <ErrorNotice message={getErrorMessage(movementQuery.error)} /> : null}
 
       <header className="detail-header">
         <div>

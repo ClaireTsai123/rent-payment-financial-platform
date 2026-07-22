@@ -1,20 +1,23 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ArrowRight, PlayCircle, RefreshCw } from "lucide-react";
 import { createRenterCollection, listMoneyMovements, listPaymentPlans } from "../../api/renterPortal";
-import { ApiError } from "../../api/http";
+import { getErrorMessage } from "../../api/errorMessage";
 import { useAuth } from "../../auth/authContext";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorNotice } from "../../components/feedback/ErrorNotice";
+import { SuccessNotice } from "../../components/feedback/SuccessNotice";
 import { MoneyAmount } from "../../components/money/MoneyAmount";
 import { StatusPill } from "../../components/status/StatusPill";
 import { formatDate, formatDateTime, humanizeEnum } from "../../utils/formatters";
+import { isCollectionEligiblePaymentPlan } from "./paymentPlanEligibility";
 
 export function RenterDashboardPage() {
   const auth = useAuth();
   const token = auth.token ?? "";
   const queryClient = useQueryClient();
+  const [collectionResultId, setCollectionResultId] = useState<string | null>(null);
 
   const paymentPlansQuery = useQuery({
     queryKey: ["payment-plans"],
@@ -28,7 +31,15 @@ export function RenterDashboardPage() {
     enabled: Boolean(token)
   });
 
-  const primaryPlan = paymentPlansQuery.data?.content[0];
+  const openPlans = useMemo(
+    () => paymentPlansQuery.data?.content.filter(isCollectionEligiblePaymentPlan) ?? [],
+    [paymentPlansQuery.data]
+  );
+  const primaryPlan = useMemo(
+    () =>
+      paymentPlansQuery.data?.content.find(isCollectionEligiblePaymentPlan),
+    [paymentPlansQuery.data]
+  );
   const pendingMovements = useMemo(
     () =>
       movementsQuery.data?.content.filter((movement) =>
@@ -49,7 +60,8 @@ export function RenterDashboardPage() {
         currency: "USD"
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (response) => {
+      setCollectionResultId(response.moneyMovementId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["payment-plans"] }),
         queryClient.invalidateQueries({ queryKey: ["money-movements"] })
@@ -70,6 +82,7 @@ export function RenterDashboardPage() {
           type="button"
           className="secondary-button"
           onClick={() => {
+            setCollectionResultId(null);
             void paymentPlansQuery.refetch();
             void movementsQuery.refetch();
           }}
@@ -79,12 +92,17 @@ export function RenterDashboardPage() {
         </button>
       </header>
 
-      {error ? <ErrorNotice message={error instanceof ApiError ? error.message : String(error)} /> : null}
+      {error ? <ErrorNotice message={getErrorMessage(error)} /> : null}
+      {collectionResultId ? (
+        <SuccessNotice>
+          Collection started. <Link className="inline-link" to={`/money-movements/${collectionResultId}`}>View movement</Link>
+        </SuccessNotice>
+      ) : null}
 
       <section className="metrics-grid" aria-label="Payment summary">
         <div className="metric">
           <span>Open plans</span>
-          <strong>{paymentPlansQuery.data?.totalElements ?? "..."}</strong>
+          <strong aria-label="Open plans count">{paymentPlansQuery.data ? openPlans.length : "..."}</strong>
         </div>
         <div className="metric">
           <span>In-flight movements</span>
