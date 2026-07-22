@@ -25,7 +25,7 @@ export function DevTokenPage() {
           <div className="brand-mark">RP</div>
           <div>
             <h1>Rent Payment</h1>
-            <p>Local renter portal access</p>
+            <p>Local portal access</p>
           </div>
         </div>
 
@@ -36,6 +36,11 @@ export function DevTokenPage() {
           </span>
           <input value={token} onChange={(event) => setToken(event.target.value)} spellCheck={false} />
         </label>
+
+        <div className="token-examples" aria-label="Dev token examples">
+          <span>Renter: dev:test-user:renter-123:RENTER</span>
+          <span>Operations: dev:support-user:-:SUPPORT</span>
+        </div>
 
         <button type="submit" className="primary-button">
           <LogIn aria-hidden="true" size={18} />

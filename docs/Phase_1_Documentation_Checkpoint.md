@@ -46,6 +46,9 @@ Full-stack enablement started:
 - Secured internal operations read APIs for `SUPPORT`, `FINOPS`, and `ADMIN` covering
   money movements, provider transactions, webhook events, outbox events, settlement
   records, reconciliation runs, and reconciliation exceptions
+- Read-only internal operations portal foundation under `frontend/`, including protected
+  `SUPPORT`/`FINOPS`/`ADMIN` routes, operations navigation, list/detail pages, filters,
+  pagination, state-history detail, and loading/empty/error/background-refresh states
 
 ## Business Scope
 
@@ -85,13 +88,13 @@ The service does not own:
 
 | Module       | Implemented responsibility                                            |
 |--------------|------------------------------------------------------------------------|
-| `frontend`   | React/Vite renter portal foundation for local/dev full-stack validation |
+| `frontend`   | React/Vite renter and operations portal foundation for local/dev validation |
 
 The frontend currently uses React, TypeScript, React Router, TanStack Query, and a Vite
 dev-server proxy to the Spring Boot API. It stores a local/dev bearer token in browser
 local storage, reads renter-scoped payment plans and money movements from `/api/v1/me/**`,
-initiates renter collections through the existing idempotent command endpoint, shows
-success/error feedback, and refreshes renter read models after submission.
+initiates renter collections through the existing idempotent command endpoint, and
+provides read-only internal operations pages backed by `/api/v1/ops/**`.
 
 ## Current Runtime Flow
 
@@ -425,9 +428,12 @@ frontend/
 Current repository implementation:
 
 - `frontend/src/auth`: local/dev token context and protected route
-- `frontend/src/api`: typed API client for renter-scoped reads and collection command
+- `frontend/src/api`: typed API clients for renter-scoped reads, collection command, and
+  operations read APIs
 - `frontend/src/pages/renter`: dev token page, dashboard, payment-plan detail, and
   money-movement detail with pagination for renter list views
+- `frontend/src/pages/operations`: read-only operations list/detail pages, resource
+  metadata, reusable filters, table rendering, detail rendering, and state-history detail
 - `frontend/src/components`: layout, status, money, pagination, and feedback components
 - `frontend/src/test`: React Testing Library provider setup for focused portal tests
 - `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
@@ -457,12 +463,13 @@ Future production hardening should add:
 Continue with production-readiness enablement:
 
 1. Add production OAuth2/JWT integration behind the same frontend auth boundary.
-2. Build the internal operations portal read-only slice on top of the new operations APIs.
+2. Harden the internal operations portal with saved views, URL-synchronized filters, and
+   production-grade exact-search workflows.
 3. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
    backend, and frontend.
-4. Add operations filtering UX and constrained search controls in the operations portal.
-5. Add provider ambiguity/status-polling runbooks and internal tools before any
+4. Add provider ambiguity/status-polling runbooks and internal tools before any
    production provider integration.
+5. Add manual-resolution workflow APIs only after operations read workflows are stable.
 
 This creates a real full-stack path without disturbing the established financial domain
 logic.

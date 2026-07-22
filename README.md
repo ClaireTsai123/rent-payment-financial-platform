@@ -75,8 +75,8 @@ The code is one Spring Boot deployable organized into explicit modules:
 
 The repository also contains one frontend application:
 
-- `frontend`: React, TypeScript, Vite, React Router, TanStack Query renter portal
-  foundation for local/dev full-stack validation
+- `frontend`: React, TypeScript, Vite, React Router, TanStack Query renter and internal
+  operations portal foundation for local/dev full-stack validation
 
 Local/dev profiles include demo fixture data:
 
@@ -703,6 +703,7 @@ Implemented:
 - First full-stack enablement slice: Spring Security dev principal, renter-scoped read
   APIs, DTOs, pagination, and renter ownership checks
 - Internal operations read APIs for support and finance workflows
+- Read-only internal operations portal foundation under `frontend/`
 - Local/dev-only demo seed data for `renter-123`
 - Modular Spring Boot backend
 - PostgreSQL/Flyway persistence
@@ -725,7 +726,7 @@ Not yet implemented:
 - Real S3 file source
 - Production OAuth2/JWT integration
 - Production-grade renter-facing portal
-- Internal financial-operations portal
+- Production-grade internal financial-operations portal
 - Docker Compose/local full-stack orchestration
 - Production deployment artifacts
 
@@ -814,6 +815,13 @@ Current frontend implementation:
 - Focused Vitest/React Testing Library coverage for renter dashboard, payment-plan
   detail, money-movement detail, auth headers, pagination, success, empty, and error
   states
+- Operations login support using the same local/dev token entry, including `SUPPORT`,
+  `FINOPS`, and `ADMIN` route protection
+- Read-only operations navigation, list pages, detail pages, pagination, filters,
+  loading/empty/error/background-refresh states, state-history detail, and reusable
+  table/filter/detail rendering for `/api/v1/ops/**`
+- Focused operations portal tests for role protection, list rendering, filtering,
+  pagination, detail views, and backend error handling
 - Vite dev proxy for local Spring Boot integration
 - Local/dev terminal-state demo script for applying mock-provider webhooks to portal-created
   collections without adding privileged controls to the renter UI
