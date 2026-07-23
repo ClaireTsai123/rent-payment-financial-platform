@@ -1,5 +1,5 @@
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getOperationsResource } from "../../api/operationsPortal";
 import { getErrorMessage } from "../../api/errorMessage";
@@ -11,6 +11,7 @@ import { getOperationsResourceConfig } from "./operationsResources";
 
 export function OperationsDetailPage() {
   const { resourceKey, id } = useParams();
+  const location = useLocation();
   const config = getOperationsResourceConfig(resourceKey);
   const { token } = useAuth();
   const query = useQuery({
@@ -20,10 +21,11 @@ export function OperationsDetailPage() {
   });
   const record = query.data;
   const statusValue = config.statusField && record ? readValue(record, config.statusField) : null;
+  const relatedLinks = record ? buildRelatedLinks(config.relatedLinks ?? [], record as Record<string, unknown>) : [];
 
   return (
     <div className="page-stack">
-      <Link className="back-link" to={`/ops/${config.key}`}>
+      <Link className="back-link" to={`/ops/${config.key}${location.search}`}>
         <ArrowLeft aria-hidden="true" size={16} />
         Back
       </Link>
@@ -56,6 +58,20 @@ export function OperationsDetailPage() {
             ))}
           </section>
 
+          {relatedLinks.length > 0 ? (
+            <section className="content-band">
+              <h2>Related records</h2>
+              <div className="related-link-grid">
+                {relatedLinks.map((link) => (
+                  <Link className="related-link" to={link.to} key={`${link.label}-${link.to}`}>
+                    <span>{link.label}</span>
+                    <strong>{link.value}</strong>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {"stateHistory" in record && Array.isArray(record.stateHistory) ? (
             <section className="content-band">
               <h2>State history</h2>
@@ -81,4 +97,24 @@ export function OperationsDetailPage() {
       ) : null}
     </div>
   );
+}
+
+function buildRelatedLinks(
+  relatedLinks: NonNullable<ReturnType<typeof getOperationsResourceConfig>["relatedLinks"]>,
+  record: Record<string, unknown>
+) {
+  return relatedLinks.flatMap((link) => {
+    if (link.when && !link.when(record)) {
+      return [];
+    }
+    const value = record[link.field];
+    if (value === null || value === undefined || String(value).trim() === "") {
+      return [];
+    }
+    const stringValue = String(value);
+    const to = link.detail
+      ? `/ops/${link.resourceKey}/${encodeURIComponent(stringValue)}`
+      : `/ops/${link.resourceKey}?${new URLSearchParams({ [link.filter ?? link.field]: stringValue }).toString()}`;
+    return [{ label: link.label, to, value: stringValue }];
+  });
 }

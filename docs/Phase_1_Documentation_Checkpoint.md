@@ -51,6 +51,9 @@ Full-stack enablement started:
 - Read-only internal operations portal foundation under `frontend/`, including protected
   `SUPPORT`/`FINOPS`/`ADMIN` routes, operations navigation, list/detail pages, filters,
   pagination, state-history detail, and loading/empty/error/background-refresh states
+- Operations portal URL-shareable investigation views, with filters and pagination
+  synchronized to query parameters, exact-search fields called out, filtered empty/error
+  states, and related-record links across operations detail pages
 - Docker Compose local full-stack orchestration for PostgreSQL, the Spring Boot backend,
   and the React frontend
 
@@ -455,7 +458,9 @@ Current repository implementation:
 - `frontend/src/pages/renter`: dev token page, dashboard, payment-plan detail, and
   money-movement detail with pagination for renter list views
 - `frontend/src/pages/operations`: read-only operations list/detail pages, resource
-  metadata, reusable filters, table rendering, detail rendering, and state-history detail
+  metadata, reusable filters, table rendering, detail rendering, state-history detail,
+  URL-synchronized filters/pagination, exact-search indicators, filtered empty states,
+  and related-record navigation
 - `frontend/src/components`: layout, status, money, pagination, and feedback components
 - `frontend/src/test`: React Testing Library provider setup for focused portal tests
 - `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
@@ -487,12 +492,10 @@ Future production hardening should add:
 
 Continue with production-readiness enablement:
 
-1. Harden the internal operations portal with saved views, URL-synchronized filters, and
-   production-grade exact-search workflows.
-2. Add provider ambiguity/status-polling runbooks and internal tools before any
+1. Add provider ambiguity/status-polling runbooks and internal tools before any
    production provider integration.
-3. Add manual-resolution workflow APIs only after operations read workflows are stable.
-4. Add production OAuth2 client login only when the frontend moves beyond local/dev token
+2. Add manual-resolution workflow APIs only after operations read workflows are stable.
+3. Add production OAuth2 client login only when the frontend moves beyond local/dev token
    entry.
 
 This creates a real full-stack path without disturbing the established financial domain

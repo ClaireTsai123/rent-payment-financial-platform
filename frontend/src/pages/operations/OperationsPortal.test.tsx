@@ -122,7 +122,26 @@ describe("Operations portal", () => {
     const createdFrom = encodeURIComponent(new Date("2026-08-01T10:30").toISOString());
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      `/api/v1/ops/money-movements?page=0&size=20&state=PROCESSING&renterId=renter-123&createdFrom=${createdFrom}`,
+      `/api/v1/ops/money-movements?page=0&size=20&renterId=renter-123&state=PROCESSING&createdFrom=${createdFrom}`,
+      expect.any(Object)
+    );
+  });
+
+  it("loads operations filters and pagination from shared URL parameters", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(await jsonResponse(page([movement], { number: 2 })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<App />, {
+      auth: supportAuth,
+      initialEntries: ["/ops/money-movements?page=2&state=PROCESSING&renterId=renter-123"]
+    });
+
+    expect(await screen.findByText("ops-demo-collection")).toBeInTheDocument();
+    expect(screen.getByText("2 active filters")).toBeInTheDocument();
+    expect(screen.getByLabelText("State")).toHaveValue("PROCESSING");
+    expect(screen.getByLabelText("Renter ID")).toHaveValue("renter-123");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/money-movements?page=2&size=20&renterId=renter-123&state=PROCESSING",
       expect.any(Object)
     );
   });
@@ -141,6 +160,29 @@ describe("Operations portal", () => {
 
     expect(await screen.findByText("ops-second-page")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/ops/money-movements?page=1&size=20", expect.any(Object));
+  });
+
+  it("keeps filters when paginating a shared operations view", async () => {
+    const secondMovement = { ...movement, id: "018f6f8d-2222-7000-8000-000000000202", operationKey: "ops-second-page" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(await jsonResponse(page([movement], { totalElements: 2, totalPages: 2, first: true, last: false })))
+      .mockResolvedValueOnce(await jsonResponse(page([secondMovement], { number: 1, totalElements: 2, totalPages: 2, first: false, last: true })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<App />, {
+      auth: supportAuth,
+      initialEntries: ["/ops/money-movements?state=PROCESSING&renterId=renter-123"]
+    });
+
+    expect(await screen.findByText("ops-demo-collection")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Money movements pagination next page" }));
+
+    expect(await screen.findByText("ops-second-page")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/money-movements?page=1&size=20&renterId=renter-123&state=PROCESSING",
+      expect.any(Object)
+    );
   });
 
   it("renders money movement detail with state history", async () => {
@@ -174,6 +216,8 @@ describe("Operations portal", () => {
     expect(screen.getByText("State history")).toBeInTheDocument();
     expect(screen.getByText("PROVIDER_SUBMITTED")).toBeInTheDocument();
     expect(screen.getByText("WEBHOOK_SUCCEEDED")).toBeInTheDocument();
+    expect(screen.getByText("Provider transactions for this movement")).toBeInTheDocument();
+    expect(screen.getByText("Outbox events for this movement")).toBeInTheDocument();
   });
 
   it("renders provider transaction detail", async () => {
@@ -184,8 +228,53 @@ describe("Operations portal", () => {
       initialEntries: [`/ops/provider-transactions/${providerTransaction.id}`]
     });
 
-    expect(await screen.findByText("mock-txn-123")).toBeInTheDocument();
+    expect(await screen.findAllByText("mock-txn-123")).not.toHaveLength(0);
     expect(screen.getByText("mock-provider")).toBeInTheDocument();
+    expect(screen.getByText("Open money movement")).toBeInTheDocument();
+    expect(screen.getByText("Webhook events for this provider ref")).toBeInTheDocument();
+  });
+
+  it("navigates from detail pages to related filtered records", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(await jsonResponse(providerTransaction))
+      .mockResolvedValueOnce(await jsonResponse(page([])));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<App />, {
+      auth: supportAuth,
+      initialEntries: [`/ops/provider-transactions/${providerTransaction.id}`]
+    });
+
+    await userEvent.click(await screen.findByText("Webhook events for this provider ref"));
+
+    expect(await screen.findByText("No matching records")).toBeInTheDocument();
+    expect(screen.getByText("This shared view loaded correctly, but no records match the current exact-search or filter criteria.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/provider-webhook-events?page=0&size=20&providerTransactionId=mock-txn-123",
+      expect.any(Object)
+    );
+  });
+
+  it("returns from detail pages to the same filtered list view", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(await jsonResponse(providerTransaction))
+      .mockResolvedValueOnce(await jsonResponse(page([providerTransaction], { number: 3 })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<App />, {
+      auth: supportAuth,
+      initialEntries: [`/ops/provider-transactions/${providerTransaction.id}?page=3&provider=mock-provider`]
+    });
+
+    await userEvent.click(await screen.findByRole("link", { name: "Back" }));
+
+    expect(await screen.findByText("mock-txn-123")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/provider-transactions?page=3&size=20&provider=mock-provider",
+      expect.any(Object)
+    );
   });
 
   it("shows backend error feedback", async () => {

@@ -1,6 +1,6 @@
 import { RefreshCw } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listOperationsResource } from "../../api/operationsPortal";
 import { getErrorMessage } from "../../api/errorMessage";
@@ -14,11 +14,20 @@ import { OperationsFilterBar } from "./OperationsFilterBar";
 
 export function OperationsListPage() {
   const { resourceKey } = useParams();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const config = getOperationsResourceConfig(resourceKey);
   const { token } = useAuth();
-  const [page, setPage] = useState(0);
-  const [draftFilters, setDraftFilters] = useState<Record<string, string>>({});
-  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+  const page = parsePage(searchParams.get("page"));
+  const appliedFilters = useMemo(
+    () => readFiltersFromSearch(searchParams, config.filters.map((filter) => filter.name)),
+    [config.filters, searchParams]
+  );
+  const [draftFilters, setDraftFilters] = useState<Record<string, string>>(appliedFilters);
+
+  useEffect(() => {
+    setDraftFilters(appliedFilters);
+  }, [appliedFilters]);
 
   const query = useQuery({
     queryKey: ["ops", config.key, page, appliedFilters],
@@ -26,7 +35,25 @@ export function OperationsListPage() {
     enabled: Boolean(token)
   });
 
-  const activeFilters = useMemo(() => Object.values(appliedFilters).some((value) => value.trim()), [appliedFilters]);
+  const activeFilterCount = useMemo(
+    () => Object.values(appliedFilters).filter((value) => value.trim()).length,
+    [appliedFilters]
+  );
+  const activeFilters = activeFilterCount > 0;
+
+  function replaceSearch(nextFilters: Record<string, string>, nextPage = 0) {
+    const nextParams = new URLSearchParams();
+    if (nextPage > 0) {
+      nextParams.set("page", String(nextPage));
+    }
+    config.filters.forEach((filter) => {
+      const value = nextFilters[filter.name]?.trim();
+      if (value) {
+        nextParams.set(filter.name, value);
+      }
+    });
+    setSearchParams(nextParams);
+  }
 
   return (
     <div className="page-stack">
@@ -46,14 +73,13 @@ export function OperationsListPage() {
         values={draftFilters}
         onChange={setDraftFilters}
         onSubmit={() => {
-          setPage(0);
-          setAppliedFilters(draftFilters);
+          replaceSearch(draftFilters);
         }}
         onReset={() => {
-          setPage(0);
           setDraftFilters({});
-          setAppliedFilters({});
+          setSearchParams(new URLSearchParams());
         }}
+        activeFilterCount={activeFilterCount}
       />
 
       {query.error ? <ErrorNotice message={getErrorMessage(query.error)} /> : null}
@@ -61,7 +87,14 @@ export function OperationsListPage() {
       {query.isFetching && !query.isLoading ? <span className="loading-label">Refreshing...</span> : null}
 
       {query.data && query.data.empty ? (
-        <EmptyState title={activeFilters ? "No matching records" : `No ${config.label.toLowerCase()}`} />
+        <EmptyState
+          title={activeFilters ? "No matching records" : `No ${config.label.toLowerCase()}`}
+          detail={
+            activeFilters
+              ? "This shared view loaded correctly, but no records match the current exact-search or filter criteria."
+              : undefined
+          }
+        />
       ) : null}
 
       {query.data && !query.data.empty ? (
@@ -72,7 +105,12 @@ export function OperationsListPage() {
               <span>Open</span>
             </div>
             {query.data.content.map((row) => (
-              <Link className="ops-row table-link" role="row" key={String(readValue(row, "id"))} to={`/ops/${config.key}/${readValue(row, "id")}`}>
+              <Link
+                className="ops-row table-link"
+                role="row"
+                key={String(readValue(row, "id"))}
+                to={`/ops/${config.key}/${readValue(row, "id")}${location.search}`}
+              >
                 {config.columns.map((column) => (
                   <span key={column.key}>
                     {renderOperationsValue(readValue(row, column.key), column.kind, String(readValue(row, "currency") ?? "USD"))}
@@ -86,11 +124,26 @@ export function OperationsListPage() {
             page={query.data}
             isFetching={query.isFetching}
             label={`${config.label} pagination`}
-            onPrevious={() => setPage((current) => Math.max(0, current - 1))}
-            onNext={() => setPage((current) => current + 1)}
+            onPrevious={() => replaceSearch(appliedFilters, Math.max(0, page - 1))}
+            onNext={() => replaceSearch(appliedFilters, page + 1)}
           />
         </section>
       ) : null}
     </div>
   );
+}
+
+function parsePage(value: string | null) {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 0 ? page : 0;
+}
+
+function readFiltersFromSearch(searchParams: URLSearchParams, allowedNames: string[]) {
+  return allowedNames.reduce<Record<string, string>>((filters, name) => {
+    const value = searchParams.get(name);
+    if (value) {
+      filters[name] = value;
+    }
+    return filters;
+  }, {});
 }

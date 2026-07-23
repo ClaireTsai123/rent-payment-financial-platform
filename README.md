@@ -79,7 +79,8 @@ The code is one Spring Boot deployable organized into explicit modules:
 The repository also contains one frontend application:
 
 - `frontend`: React, TypeScript, Vite, React Router, TanStack Query renter and internal
-  operations portal foundation for local/dev full-stack validation
+  operations portal foundation for local/dev full-stack validation, including
+  URL-shareable operations investigation views
 
 Local/dev profiles include demo fixture data:
 
@@ -804,6 +805,8 @@ Implemented:
 - Production-style OAuth2/JWT resource-server authentication path
 - Internal operations read APIs for support and finance workflows
 - Read-only internal operations portal foundation under `frontend/`
+- URL-shareable operations portal investigation views with synchronized filters,
+  pagination, exact-search inputs, and related-record navigation
 - Docker Compose local full-stack orchestration for PostgreSQL, backend, and frontend
 - Local/dev-only demo seed data for `renter-123`
 - Modular Spring Boot backend
@@ -919,8 +922,17 @@ Current frontend implementation:
 - Read-only operations navigation, list pages, detail pages, pagination, filters,
   loading/empty/error/background-refresh states, state-history detail, and reusable
   table/filter/detail rendering for `/api/v1/ops/**`
+- URL query parameters synchronize operations filters and pagination, so filtered views
+  survive refresh, browser navigation, and shared links. This is the current saved-view
+  capability; there are no persisted or named saved views.
+- Exact-search fields are called out for IDs, operation keys, idempotency keys, provider
+  references, settlement references, source files, and reconciliation run references.
+- Operations detail pages include related-record links between money movements, provider
+  transactions, webhook events, outbox events, settlement records, reconciliation runs,
+  and reconciliation exceptions.
 - Focused operations portal tests for role protection, list rendering, filtering,
-  pagination, detail views, and backend error handling
+  pagination, URL-filter persistence, shared deep links, detail navigation, and backend
+  error handling
 - Vite dev proxy for local Spring Boot integration
 - Local/dev terminal-state demo script for applying mock-provider webhooks to portal-created
   collections without adding privileged controls to the renter UI
@@ -946,7 +958,8 @@ Recommended full-stack phases:
    events, outbox events, settlement records, reconciliation runs, and exceptions.
 5. Pagination, filtering, constrained search, and supporting database indexes.
 6. Provider ambiguity/status-polling runbooks and internal investigation tools.
-7. Production integrations: S3, SNS/SQS, DLQ workflows, secure secrets, observability,
+7. Manual-resolution APIs only after read-only operations workflows remain stable.
+8. Production integrations: S3, SNS/SQS, DLQ workflows, secure secrets, observability,
    and deployment artifacts.
 
 Recommended first full-stack vertical slice:

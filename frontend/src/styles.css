@@ -306,15 +306,44 @@ code {
   padding: 14px;
 }
 
+.filter-summary {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 3px;
+  border-bottom: 1px solid #edf1f5;
+  padding-bottom: 12px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.filter-summary strong {
+  color: #344054;
+}
+
 .filter-field {
   display: grid;
   gap: 6px;
 }
 
 .filter-field span {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  gap: 6px;
   color: #667085;
   font-size: 12px;
   font-weight: 750;
+}
+
+.filter-field em {
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #475467;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 2px 6px;
+  text-transform: uppercase;
 }
 
 .filter-field input,
@@ -336,6 +365,38 @@ code {
 
 .ops-detail-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.related-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.related-link {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #dfe5ed;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.related-link:hover {
+  background: #f6fafb;
+}
+
+.related-link span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.related-link strong {
+  color: #153b52;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .detail-pre {

@@ -5,6 +5,16 @@ export type FilterOption = {
   label: string;
   type?: "text" | "datetime-local" | "date" | "select";
   options?: string[];
+  exact?: boolean;
+};
+
+export type RelatedLinkConfig = {
+  field: string;
+  label: string;
+  resourceKey: OperationsResourceKey;
+  filter?: string;
+  detail?: boolean;
+  when?: (record: Record<string, unknown>) => boolean;
 };
 
 export type OperationsResourceConfig = {
@@ -16,6 +26,7 @@ export type OperationsResourceConfig = {
   columns: { key: string; label: string; kind?: "status" | "date" | "money" | "code" }[];
   filters: FilterOption[];
   detailFields: { key: string; label: string; kind?: "status" | "date" | "money" | "code" | "multiline" }[];
+  relatedLinks?: RelatedLinkConfig[];
 };
 
 const lifecycleFilters: FilterOption[] = [
@@ -38,12 +49,12 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "createdAt", label: "Created", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Movement ID" },
-      { name: "paymentPlanId", label: "Payment plan ID" },
-      { name: "renterId", label: "Renter ID" },
+      { name: "id", label: "Movement ID", exact: true },
+      { name: "paymentPlanId", label: "Payment plan ID", exact: true },
+      { name: "renterId", label: "Renter ID", exact: true },
       { name: "state", label: "State", type: "select", options: ["CREATED", "SUBMITTED", "PROCESSING", "SUCCEEDED", "FAILED", "RETURNED", "REVERSED"] },
       { name: "type", label: "Type", type: "select", options: ["RENTER_COLLECTION", "PROPERTY_DISBURSEMENT"] },
-      { name: "operationKey", label: "Operation key" },
+      { name: "operationKey", label: "Operation key", exact: true },
       ...lifecycleFilters
     ],
     detailFields: [
@@ -56,6 +67,11 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "operationKey", label: "Operation key", kind: "code" },
       { key: "createdAt", label: "Created", kind: "date" },
       { key: "updatedAt", label: "Updated", kind: "date" }
+    ],
+    relatedLinks: [
+      { field: "id", label: "Provider transactions for this movement", resourceKey: "provider-transactions", filter: "moneyMovementId" },
+      { field: "id", label: "Outbox events for this movement", resourceKey: "outbox-events", filter: "aggregateId" },
+      { field: "id", label: "Settlement records for this movement", resourceKey: "settlement-records", filter: "moneyMovementId" }
     ]
   },
   {
@@ -72,13 +88,13 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "createdAt", label: "Created", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Transaction ID" },
-      { name: "moneyMovementId", label: "Movement ID" },
-      { name: "paymentAttemptId", label: "Attempt ID" },
+      { name: "id", label: "Transaction ID", exact: true },
+      { name: "moneyMovementId", label: "Movement ID", exact: true },
+      { name: "paymentAttemptId", label: "Attempt ID", exact: true },
       { name: "provider", label: "Provider" },
       { name: "status", label: "Status", type: "select", options: ["PENDING", "PROCESSING", "SUCCEEDED", "FAILED", "RETURNED", "REVERSED", "UNKNOWN"] },
-      { name: "providerTransactionId", label: "Provider ref" },
-      { name: "providerIdempotencyKey", label: "Provider idem key" },
+      { name: "providerTransactionId", label: "Provider ref", exact: true },
+      { name: "providerIdempotencyKey", label: "Provider idem key", exact: true },
       ...lifecycleFilters
     ],
     detailFields: [
@@ -93,6 +109,12 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "settlementReference", label: "Settlement ref", kind: "code" },
       { key: "createdAt", label: "Created", kind: "date" },
       { key: "updatedAt", label: "Updated", kind: "date" }
+    ],
+    relatedLinks: [
+      { field: "moneyMovementId", label: "Open money movement", resourceKey: "money-movements", detail: true },
+      { field: "providerTransactionId", label: "Webhook events for this provider ref", resourceKey: "provider-webhook-events", filter: "providerTransactionId" },
+      { field: "providerTransactionId", label: "Settlement records for this provider ref", resourceKey: "settlement-records", filter: "providerTransactionReference" },
+      { field: "providerTransactionId", label: "Reconciliation exceptions for this provider ref", resourceKey: "reconciliation-exceptions", filter: "providerTransactionReference" }
     ]
   },
   {
@@ -109,10 +131,10 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "receivedAt", label: "Received", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Event ID" },
+      { name: "id", label: "Event ID", exact: true },
       { name: "provider", label: "Provider" },
-      { name: "providerEventId", label: "Provider event ID" },
-      { name: "providerTransactionId", label: "Provider ref" },
+      { name: "providerEventId", label: "Provider event ID", exact: true },
+      { name: "providerTransactionId", label: "Provider ref", exact: true },
       { name: "normalizedStatus", label: "Provider status", type: "select", options: ["PENDING", "PROCESSING", "SUCCEEDED", "FAILED", "RETURNED", "REVERSED", "UNKNOWN"] },
       { name: "status", label: "Processing", type: "select", options: ["RECEIVED", "APPLIED", "DUPLICATE", "UNMATCHED", "IGNORED"] },
       { name: "receivedFrom", label: "Received from", type: "datetime-local" },
@@ -130,6 +152,10 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "receivedAt", label: "Received", kind: "date" },
       { key: "processedAt", label: "Processed", kind: "date" },
       { key: "rawPayload", label: "Raw payload", kind: "multiline" }
+    ],
+    relatedLinks: [
+      { field: "providerTransactionId", label: "Provider transaction for this ref", resourceKey: "provider-transactions", filter: "providerTransactionId" },
+      { field: "providerTransactionId", label: "Settlement records for this provider ref", resourceKey: "settlement-records", filter: "providerTransactionReference" }
     ]
   },
   {
@@ -146,10 +172,10 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "createdAt", label: "Created", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Outbox ID" },
-      { name: "aggregateId", label: "Aggregate ID" },
+      { name: "id", label: "Outbox ID", exact: true },
+      { name: "aggregateId", label: "Aggregate ID", exact: true },
       { name: "aggregateType", label: "Aggregate type" },
-      { name: "eventType", label: "Event type" },
+      { name: "eventType", label: "Event type", exact: true },
       { name: "status", label: "Status", type: "select", options: ["PENDING", "PUBLISHED", "FAILED"] },
       ...lifecycleFilters
     ],
@@ -164,6 +190,15 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "publishedAt", label: "Published", kind: "date" },
       { key: "nextAttemptAt", label: "Next attempt", kind: "date" },
       { key: "payload", label: "Payload", kind: "multiline" }
+    ],
+    relatedLinks: [
+      {
+        field: "aggregateId",
+        label: "Open money movement aggregate",
+        resourceKey: "money-movements",
+        detail: true,
+        when: (record) => record.aggregateType === "MoneyMovement"
+      }
     ]
   },
   {
@@ -180,13 +215,13 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "createdAt", label: "Created", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Settlement ID" },
-      { name: "moneyMovementId", label: "Movement ID" },
-      { name: "providerTransactionId", label: "Provider txn ID" },
+      { name: "id", label: "Settlement ID", exact: true },
+      { name: "moneyMovementId", label: "Movement ID", exact: true },
+      { name: "providerTransactionId", label: "Provider txn ID", exact: true },
       { name: "provider", label: "Provider" },
       { name: "status", label: "Status", type: "select", options: ["EXPECTED", "SETTLED", "MISMATCHED"] },
-      { name: "providerTransactionReference", label: "Provider ref" },
-      { name: "providerBatchReference", label: "Batch ref" },
+      { name: "providerTransactionReference", label: "Provider ref", exact: true },
+      { name: "providerBatchReference", label: "Batch ref", exact: true },
       { name: "expectedSettlementDateFrom", label: "Expected from", type: "date" },
       { name: "expectedSettlementDateTo", label: "Expected to", type: "date" }
     ],
@@ -201,6 +236,12 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "actualNetAmount", label: "Actual net", kind: "money" },
       { key: "providerTransactionReference", label: "Provider ref", kind: "code" },
       { key: "providerBatchReference", label: "Batch ref", kind: "code" }
+    ],
+    relatedLinks: [
+      { field: "moneyMovementId", label: "Open money movement", resourceKey: "money-movements", detail: true },
+      { field: "providerTransactionId", label: "Open provider transaction", resourceKey: "provider-transactions", detail: true },
+      { field: "providerTransactionReference", label: "Webhook events for this provider ref", resourceKey: "provider-webhook-events", filter: "providerTransactionId" },
+      { field: "providerTransactionReference", label: "Reconciliation exceptions for this provider ref", resourceKey: "reconciliation-exceptions", filter: "providerTransactionReference" }
     ]
   },
   {
@@ -217,9 +258,9 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "startedAt", label: "Started", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Run ID" },
+      { name: "id", label: "Run ID", exact: true },
       { name: "status", label: "Status", type: "select", options: ["STARTED", "COMPLETED", "FAILED"] },
-      { name: "sourceFile", label: "Source file" },
+      { name: "sourceFile", label: "Source file", exact: true },
       { name: "startedFrom", label: "Started from", type: "datetime-local" },
       { name: "startedTo", label: "Started to", type: "datetime-local" }
     ],
@@ -233,6 +274,9 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "startedAt", label: "Started", kind: "date" },
       { key: "completedAt", label: "Completed", kind: "date" },
       { key: "failureReason", label: "Failure reason" }
+    ],
+    relatedLinks: [
+      { field: "id", label: "Exceptions for this run", resourceKey: "reconciliation-exceptions", filter: "reconciliationRunId" }
     ]
   },
   {
@@ -249,11 +293,11 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "createdAt", label: "Created", kind: "date" }
     ],
     filters: [
-      { name: "id", label: "Exception ID" },
-      { name: "reconciliationRunId", label: "Run ID" },
+      { name: "id", label: "Exception ID", exact: true },
+      { name: "reconciliationRunId", label: "Run ID", exact: true },
       { name: "exceptionType", label: "Type", type: "select", options: ["MISSING_SETTLEMENT", "AMOUNT_MISMATCH", "DUPLICATE_PROVIDER_RECORD"] },
       { name: "provider", label: "Provider" },
-      { name: "providerTransactionReference", label: "Provider ref" },
+      { name: "providerTransactionReference", label: "Provider ref", exact: true },
       ...lifecycleFilters
     ],
     detailFields: [
@@ -265,6 +309,12 @@ export const operationsResources: OperationsResourceConfig[] = [
       { key: "message", label: "Message" },
       { key: "rawRecord", label: "Raw record", kind: "multiline" },
       { key: "createdAt", label: "Created", kind: "date" }
+    ],
+    relatedLinks: [
+      { field: "reconciliationRunId", label: "Open reconciliation run", resourceKey: "reconciliation-runs", detail: true },
+      { field: "providerTransactionReference", label: "Provider transaction for this ref", resourceKey: "provider-transactions", filter: "providerTransactionId" },
+      { field: "providerTransactionReference", label: "Settlement records for this provider ref", resourceKey: "settlement-records", filter: "providerTransactionReference" },
+      { field: "providerTransactionReference", label: "Webhook events for this provider ref", resourceKey: "provider-webhook-events", filter: "providerTransactionId" }
     ]
   }
 ];
