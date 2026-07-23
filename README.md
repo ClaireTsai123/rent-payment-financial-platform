@@ -8,8 +8,9 @@ technology choices, and interview narrative.
 Current implementation checkpoint: **Phase 1 Tasks 1-12** plus full-stack enablement
 through the renter and operations portal foundations: local/dev authentication,
 production-style OAuth2/JWT resource-server support, renter-scoped read APIs, internal
-operations read APIs, seeded local demo data, React workflows, pagination, and local
-terminal-state demo support under `frontend/` and `scripts/demo/`.
+operations read APIs, seeded local demo data, React workflows, pagination, local
+terminal-state demo support under `frontend/` and `scripts/demo/`, and Docker Compose
+local full-stack orchestration.
 
 For a fuller Phase 1 documentation checkpoint and full-stack roadmap, see
 [`docs/Phase_1_Documentation_Checkpoint.md`](docs/Phase_1_Documentation_Checkpoint.md).
@@ -693,7 +694,79 @@ Production architecture should resolve provider terminal states through verified
 webhooks, status polling/reconciliation, operations runbooks, and auditable internal tools,
 not through renter-facing controls or local database lookups.
 
-There is not currently a Docker Compose file in the repository.
+### Docker Compose Local Full Stack
+
+The repository also includes a Docker Compose workflow for local full-stack validation.
+It preserves the non-Docker Gradle and Vite workflow above.
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+The example values are development-only placeholders. Compose starts PostgreSQL, the
+Spring Boot backend with the `local` profile, and an Nginx-served frontend built with
+Node 22. The frontend proxies `/api` and `/actuator` to the backend service inside the
+Compose network.
+
+Build and start all services:
+
+```bash
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+Default local ports:
+
+```text
+PostgreSQL: localhost:5432
+Backend:    http://localhost:8080
+Frontend:   http://localhost:5173
+```
+
+Check health and open the portal:
+
+```bash
+curl http://localhost:8080/actuator/health
+open http://localhost:5173
+```
+
+Use local/dev tokens in the Dockerized frontend:
+
+```text
+Renter:     dev:test-user:renter-123:RENTER
+Operations: dev:support-user:-:SUPPORT
+Operations: dev:finops-user:-:FINOPS
+Operations: dev:admin-user:-:ADMIN
+```
+
+View logs:
+
+```bash
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f postgres
+```
+
+Rebuild after code changes:
+
+```bash
+docker compose up -d --build
+```
+
+Stop services without deleting the database volume:
+
+```bash
+docker compose down
+```
+
+Reset all local Docker data, including the named PostgreSQL volume:
+
+```bash
+docker compose down -v
+```
 
 ## Testing Strategy
 
@@ -731,6 +804,7 @@ Implemented:
 - Production-style OAuth2/JWT resource-server authentication path
 - Internal operations read APIs for support and finance workflows
 - Read-only internal operations portal foundation under `frontend/`
+- Docker Compose local full-stack orchestration for PostgreSQL, backend, and frontend
 - Local/dev-only demo seed data for `renter-123`
 - Modular Spring Boot backend
 - PostgreSQL/Flyway persistence
@@ -753,7 +827,6 @@ Not yet implemented:
 - Real S3 file source
 - Production-grade renter-facing portal
 - Production-grade internal financial-operations portal
-- Docker Compose/local full-stack orchestration
 - Production deployment artifacts
 
 ## Production Architecture Direction
@@ -872,7 +945,7 @@ Recommended full-stack phases:
 4. Operations portal read-only slice: money movements, provider transactions, webhook
    events, outbox events, settlement records, reconciliation runs, and exceptions.
 5. Pagination, filtering, constrained search, and supporting database indexes.
-6. Docker Compose for PostgreSQL, backend, and frontend local development.
+6. Provider ambiguity/status-polling runbooks and internal investigation tools.
 7. Production integrations: S3, SNS/SQS, DLQ workflows, secure secrets, observability,
    and deployment artifacts.
 

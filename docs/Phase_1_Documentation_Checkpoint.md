@@ -51,6 +51,8 @@ Full-stack enablement started:
 - Read-only internal operations portal foundation under `frontend/`, including protected
   `SUPPORT`/`FINOPS`/`ADMIN` routes, operations navigation, list/detail pages, filters,
   pagination, state-history detail, and loading/empty/error/background-refresh states
+- Docker Compose local full-stack orchestration for PostgreSQL, the Spring Boot backend,
+  and the React frontend
 
 ## Business Scope
 
@@ -353,6 +355,12 @@ Current local assumptions:
 - Testcontainers for integration tests
 - Node.js/npm for the optional `frontend/` local renter portal
 - Vite proxy from the frontend dev server to Spring Boot on port `8080`
+- Docker Compose local orchestration with PostgreSQL, backend, and frontend containers
+- A named PostgreSQL volume for Dockerized local data
+- The containerized backend runs with the `local` profile and the same environment-backed
+  datasource, webhook-secret, outbox, and reconciliation settings as the non-Docker app
+- The containerized frontend is built with Node 22 and served by Nginx, with `/api` and
+  `/actuator` proxied to the backend service inside the Compose network
 - Local/dev demo data seeds `renter-123` with stable payment-plan and money-movement
   fixture rows. The seeder is idempotent and is not registered for production profiles.
 - `scripts/demo/mock-provider-webhook.sh` can apply a local mock-provider webhook for a
@@ -360,7 +368,9 @@ Current local assumptions:
   `http://localhost:8080`, uses the local shared secret, and refuses non-local API URLs
   unless explicitly overridden for an intentional sandbox.
 
-There is currently no Docker Compose configuration in the repository.
+Docker Compose is intended for local development only. Production deployment remains a
+future architecture topic and should add separate cloud-specific artifacts only when the
+project reaches that slice.
 
 ## Full-Stack Architecture Direction
 
@@ -449,6 +459,9 @@ Current repository implementation:
 - `frontend/src/components`: layout, status, money, pagination, and feedback components
 - `frontend/src/test`: React Testing Library provider setup for focused portal tests
 - `frontend/vite.config.ts`: local API proxy to `http://localhost:8080`
+- `Dockerfile`: production-style Spring Boot container image build
+- `frontend/Dockerfile`: Node 22 build and Nginx runtime image for the React app
+- `docker-compose.yml`: local PostgreSQL, backend, and frontend orchestration
 - `scripts/demo/mock-provider-webhook.sh`: local/dev helper for moving a processing
   mock-provider transaction to a terminal status through the existing webhook contract
 - `src/main/java/com/claire/rentpaymentfinancialplatform/operations`: secured read-only
@@ -476,12 +489,10 @@ Continue with production-readiness enablement:
 
 1. Harden the internal operations portal with saved views, URL-synchronized filters, and
    production-grade exact-search workflows.
-2. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
-   backend, and frontend.
-3. Add provider ambiguity/status-polling runbooks and internal tools before any
+2. Add provider ambiguity/status-polling runbooks and internal tools before any
    production provider integration.
-4. Add manual-resolution workflow APIs only after operations read workflows are stable.
-5. Add production OAuth2 client login only when the frontend moves beyond local/dev token
+3. Add manual-resolution workflow APIs only after operations read workflows are stable.
+4. Add production OAuth2 client login only when the frontend moves beyond local/dev token
    entry.
 
 This creates a real full-stack path without disturbing the established financial domain

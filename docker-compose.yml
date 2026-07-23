@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rent_payment}
+      POSTGRES_USER: ${POSTGRES_USER:-rent_payment}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rent_payment_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rent_payment}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-rent_payment}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-rent_payment_dev_password}
+      MOCK_PROVIDER_WEBHOOK_SECRET: ${MOCK_PROVIDER_WEBHOOK_SECRET:-local-mock-webhook-secret}
+      OUTBOX_PUBLISHER_BATCH_SIZE: ${OUTBOX_PUBLISHER_BATCH_SIZE:-100}
+      OUTBOX_PUBLISHER_MAX_ATTEMPTS: ${OUTBOX_PUBLISHER_MAX_ATTEMPTS:-3}
+      OUTBOX_PUBLISHER_RETRY_DELAY: ${OUTBOX_PUBLISHER_RETRY_DELAY:-PT1M}
+      OUTBOX_PUBLISHER_FIXED_DELAY: ${OUTBOX_PUBLISHER_FIXED_DELAY:-PT5S}
+      OUTBOX_PUBLISHER_SCHEDULER_ENABLED: ${OUTBOX_PUBLISHER_SCHEDULER_ENABLED:-true}
+      RECONCILIATION_SETTLEMENT_CHUNK_SIZE: ${RECONCILIATION_SETTLEMENT_CHUNK_SIZE:-50}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 25s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_ORIGIN: ${FRONTEND_BACKEND_ORIGIN:-http://backend:8080}
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  postgres-data:
