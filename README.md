@@ -6,8 +6,9 @@ The blueprint remains the canonical source of truth for scope, architecture deci
 technology choices, and interview narrative.
 
 Current implementation checkpoint: **Phase 1 Tasks 1-12** plus full-stack enablement
-through the renter portal vertical slice: local/dev authentication, renter-scoped read
-APIs, seeded local demo data, React renter workflows, pagination, and local
+through the renter and operations portal foundations: local/dev authentication,
+production-style OAuth2/JWT resource-server support, renter-scoped read APIs, internal
+operations read APIs, seeded local demo data, React workflows, pagination, and local
 terminal-state demo support under `frontend/` and `scripts/demo/`.
 
 For a fuller Phase 1 documentation checkpoint and full-stack roadmap, see
@@ -27,8 +28,9 @@ Implemented Phase 1 flows:
 - Submit those movements to a deterministic mock provider adapter.
 - Track attempts, provider references, state history, webhooks, outbox events,
   settlement expectations, and reconciliation outcomes.
-- Authenticate renter-facing and internal command APIs through a replaceable local/dev
-  bearer-token principal in local/dev/test profiles.
+- Authenticate renter-facing and internal command APIs through either the replaceable
+  local/dev/test bearer-token principal or production-style OAuth2/JWT resource-server
+  authentication.
 - Expose renter-scoped read APIs for payment plans and money movements.
 - Provide a local/dev React renter portal foundation that reads renter-scoped plans and
   money movements and initiates renter collections through the existing command API.
@@ -180,9 +182,9 @@ Implemented behavior:
 
 ## Authentication And Authorization
 
-The current full-stack enablement slice adds Spring Security in a stateless shape that
-can later evolve into an OAuth2 resource server. It intentionally does not implement
-registration, password management, or a full identity service.
+Spring Security is configured as a stateless API security boundary. It intentionally
+does not implement registration, password management, token issuance, or a full identity
+service.
 
 Local/dev/test requests use a replaceable bearer-token principal:
 
@@ -196,6 +198,26 @@ Examples:
 Authorization: Bearer dev:test-user:renter-123:RENTER
 Authorization: Bearer dev:finops-user:-:FINOPS
 ```
+
+For profiles outside `local`, `dev`, and `test`, the application uses Spring Security
+OAuth2 Resource Server JWT authentication. Configure JWT validation with one of Spring
+Boot's environment-backed settings:
+
+```text
+SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://issuer.example.com/
+SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=https://issuer.example.com/.well-known/jwks.json
+```
+
+JWT claim mapping:
+
+- subject: `sub`
+- renter scope: `renter_id` or `renterId`
+- roles: `roles`, `authorities`, `scope`, or `scp`
+- supported roles: `RENTER`, `SUPPORT`, `FINOPS`, `ADMIN`
+
+The JWT converter maps those claims into the same internal `ApplicationUser` model used
+by the dev-token flow, so renter ownership enforcement and method-level role rules are
+shared.
 
 Implemented authorization behavior:
 
@@ -211,6 +233,8 @@ Implemented authorization behavior:
 - `/actuator/health` is public for local health checks.
 - The dev bearer-token filter is profile-gated to `local`, `dev`, and `test`; it is not
   registered for production profiles.
+- Production-style profiles reject `dev:` tokens and expect JWT bearer tokens from the
+  configured issuer or JWK set.
 
 ## Webhook Ingestion
 
@@ -694,6 +718,8 @@ Current test classes:
 - `ReconciliationJobTests`
 - `RenterPortalControllerTests`
 - `OperationsReadControllerTests`
+- `ProductionJwtSecurityTests`
+- `LocalDevSecurityFlowTests`
 
 ## Implemented Versus Not Yet Implemented
 
@@ -702,6 +728,7 @@ Implemented:
 - Phase 1 Tasks 1-12
 - First full-stack enablement slice: Spring Security dev principal, renter-scoped read
   APIs, DTOs, pagination, and renter ownership checks
+- Production-style OAuth2/JWT resource-server authentication path
 - Internal operations read APIs for support and finance workflows
 - Read-only internal operations portal foundation under `frontend/`
 - Local/dev-only demo seed data for `renter-123`
@@ -724,7 +751,6 @@ Not yet implemented:
 - Processed-event SQS consumer deduplication table
 - DLQ operational workflow
 - Real S3 file source
-- Production OAuth2/JWT integration
 - Production-grade renter-facing portal
 - Production-grade internal financial-operations portal
 - Docker Compose/local full-stack orchestration

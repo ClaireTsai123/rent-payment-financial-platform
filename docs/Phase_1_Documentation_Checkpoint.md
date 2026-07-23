@@ -1,8 +1,8 @@
 # Phase 1 Documentation Checkpoint
 
 This document records the current repository state after Phase 1 Tasks 1-12 and the
-full-stack enablement work through the renter portal vertical slice. It is a checkpoint
-for implementation planning and should remain consistent with
+full-stack enablement work through the renter and operations portal foundations. It is a
+checkpoint for implementation planning and should remain consistent with
 [`Flex_Rent_Payment_Project_Blueprint.md`](Flex_Rent_Payment_Project_Blueprint.md).
 
 The blueprint remains canonical. This file describes what is actually implemented in
@@ -31,6 +31,8 @@ Full-stack enablement started:
 
 - Stateless Spring Security configuration
 - Replaceable local/dev/test bearer-token principal
+- Production-style OAuth2/JWT resource-server authentication path for profiles outside
+  `local`, `dev`, and `test`
 - Renter-scoped payment-plan and money-movement read APIs
 - DTO responses for renter portal use
 - Pagination through Spring `Pageable`
@@ -289,6 +291,15 @@ Authorization: Bearer dev:<subject>:<renterId>:<comma-separated-roles>
 The dev bearer-token filter is profile-gated to `local`, `dev`, and `test`; it is not
 registered for production profiles.
 
+Production-style profiles use Spring Security OAuth2 Resource Server JWT authentication.
+JWT validation is configured through the standard Spring Boot issuer or JWK-set
+environment settings. The JWT converter maps `sub`, `renter_id` or `renterId`, and roles
+from `roles`, `authorities`, `scope`, or `scp` into the existing `ApplicationUser` model
+and `RENTER`, `SUPPORT`, `FINOPS`, `ADMIN` role checks. This preserves renter ownership
+rules and keeps method-level authorization consistent across local/dev/test and
+production-style profiles. The provider webhook endpoint remains separately protected by
+provider shared-secret verification.
+
 Frontend local/dev token entry accepts the raw token value, for example:
 
 ```text
@@ -326,6 +337,8 @@ Testing is PostgreSQL-backed through Testcontainers. The suite covers:
 - SUPPORT/FINOPS/ADMIN authorization for operations read APIs
 - operations read API pagination, filters, exact lookup, detail views, and validation
 - production-profile absence of the dev bearer-token filter
+- production-style JWT claim mapping and role enforcement
+- local/dev/test bearer-token behavior after adding the production resource-server path
 
 ## Local Development Checkpoint
 
@@ -395,7 +408,6 @@ Recommended operations pages:
 
 Remaining backend gaps:
 
-- Production OAuth2/JWT resource-server integration
 - Operations write/manual-resolution workflows
 - CORS configuration for a frontend dev server
 
@@ -451,7 +463,7 @@ Future production hardening should add:
 - Processed-event deduplication
 - SQS DLQs, alarms, and replay runbooks
 - Secure secret management
-- OAuth2/JWT integration
+- Identity-provider provisioning, token issuance, and OAuth2 client login flows
 - Actuator, Micrometer metrics, structured logging, tracing
 - Datadog and CloudWatch dashboards
 - Docker/ECR/EKS deployment artifacts
@@ -462,14 +474,15 @@ Future production hardening should add:
 
 Continue with production-readiness enablement:
 
-1. Add production OAuth2/JWT integration behind the same frontend auth boundary.
-2. Harden the internal operations portal with saved views, URL-synchronized filters, and
+1. Harden the internal operations portal with saved views, URL-synchronized filters, and
    production-grade exact-search workflows.
-3. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
+2. Add Docker Compose or an equivalent local orchestration story for PostgreSQL,
    backend, and frontend.
-4. Add provider ambiguity/status-polling runbooks and internal tools before any
+3. Add provider ambiguity/status-polling runbooks and internal tools before any
    production provider integration.
-5. Add manual-resolution workflow APIs only after operations read workflows are stable.
+4. Add manual-resolution workflow APIs only after operations read workflows are stable.
+5. Add production OAuth2 client login only when the frontend moves beyond local/dev token
+   entry.
 
 This creates a real full-stack path without disturbing the established financial domain
 logic.

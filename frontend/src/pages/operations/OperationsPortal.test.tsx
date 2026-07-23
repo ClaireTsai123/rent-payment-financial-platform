@@ -114,13 +114,15 @@ describe("Operations portal", () => {
 
     await userEvent.selectOptions(await screen.findByLabelText("State"), "PROCESSING");
     await userEvent.type(screen.getByLabelText("Renter ID"), "renter-123");
+    await userEvent.type(screen.getByLabelText("Created from"), "2026-08-01T10:30");
     await userEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(await screen.findByText("ops-demo-collection")).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const createdFrom = encodeURIComponent(new Date("2026-08-01T10:30").toISOString());
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/ops/money-movements?page=0&size=20&state=PROCESSING&renterId=renter-123",
+      `/api/v1/ops/money-movements?page=0&size=20&state=PROCESSING&renterId=renter-123&createdFrom=${createdFrom}`,
       expect.any(Object)
     );
   });
